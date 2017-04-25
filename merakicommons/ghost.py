@@ -9,18 +9,12 @@ class Ghost(ABC):
         method.__triggers_load = True
         return method
 
-    def __init__(self) -> None:
-        self.__loaded = False
-
     @abstractmethod
-    def _load(self) -> None:
+    def _load(self, attribute: str) -> None:
         pass
 
     def __getattr__(self, item: str) -> Any:
         default_error = AttributeError("'{cls}' object has no attribute '{item}'".format(cls=self.__class__.__name__, item=item))
-
-        if self.__loaded:
-            raise default_error
 
         # Check if we're inside one of self's methods
         calling_frame = _getframe(1)
@@ -47,6 +41,5 @@ class Ghost(ABC):
             raise default_error
 
         # Load and try to get attribute again
-        self._load()
-        self.__loaded = True
+        self._load(class_method.__name__)
         return self.__getattribute__(item)
