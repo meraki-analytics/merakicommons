@@ -1,6 +1,6 @@
 import pytest
 
-from merakicommons.container import SearchError, searchable, SearchableList
+from merakicommons.container import SearchError, searchable, SearchableList, SearchableSet, SearchableDictionary
 
 VALUE_COUNT = 100
 
@@ -42,7 +42,9 @@ normal = NonSearchable(100.0)
 outer = Outer(inner, normal, ["cat", "dog"], 100)
 other = Inner(["foo", "bar"])
 defined = ContainsDefined(["larry", "moe", "curly"])
-lst = SearchableList([other, normal, outer, inner, defined])
+list_ = SearchableList([other, normal, outer, inner, defined])
+set_ = SearchableSet({other, normal, outer, inner, defined})
+dict_ = SearchableDictionary({other: outer, inner: normal, "value": defined})
 
 
 def test_simple_search():
@@ -93,73 +95,75 @@ def test_contains_defined():
     assert "world" not in defined
 
 
+# List #
+
 def test_list_index():
-    assert lst[0] is other
-    assert lst[1] is normal
-    assert lst[2] is outer
-    assert lst[3] is inner
-    assert lst[4] is defined
+    assert list_[0] is other
+    assert list_[1] is normal
+    assert list_[2] is outer
+    assert list_[3] is inner
+    assert list_[4] is defined
     for i in range(5, VALUE_COUNT):
         with pytest.raises(IndexError):
-            lst[i]
+            list_[i]
 
 
 def test_simple_list_membership():
-    assert other in lst
-    assert normal in lst
-    assert outer in lst
-    assert inner in lst
-    assert defined in lst
+    assert other in list_
+    assert normal in list_
+    assert outer in list_
+    assert inner in list_
+    assert defined in list_
 
 
 def test_simple_list_contains():
-    assert lst.contains(other)
-    assert lst.contains(normal)
-    assert lst.contains(outer)
-    assert lst.contains(inner)
-    assert lst.contains(defined)
+    assert list_.contains(other)
+    assert list_.contains(normal)
+    assert list_.contains(outer)
+    assert list_.contains(inner)
+    assert list_.contains(defined)
 
 
 def test_nested_list_membership():
-    assert "hello" in lst
-    assert "world" in lst
-    assert "cat" in lst
-    assert "dog" in lst
-    assert "foo" in lst
-    assert "bar" in lst
-    assert "larry" in lst
-    assert "moe" in lst
-    assert "curly" in lst
-    assert 0 in lst
-    assert 100 in lst
-    assert 100.0 in lst
+    assert "hello" in list_
+    assert "world" in list_
+    assert "cat" in list_
+    assert "dog" in list_
+    assert "foo" in list_
+    assert "bar" in list_
+    assert "larry" in list_
+    assert "moe" in list_
+    assert "curly" in list_
+    assert 0 in list_
+    assert 100 in list_
+    assert 100.0 in list_
 
-    assert "value" not in lst
-    assert 0.0 not in lst
-    assert bytes() not in lst
+    assert "value" not in list_
+    assert 0.0 not in list_
+    assert bytes() not in list_
 
 
 def test_nested_list_contains():
-    assert lst.contains("hello")
-    assert lst.contains("world")
-    assert lst.contains("cat")
-    assert lst.contains("dog")
-    assert lst.contains("foo")
-    assert lst.contains("bar")
-    assert lst.contains("larry")
-    assert lst.contains("moe")
-    assert lst.contains("curly")
-    assert lst.contains(0)
-    assert lst.contains(100)
-    assert lst.contains(100.0)
+    assert list_.contains("hello")
+    assert list_.contains("world")
+    assert list_.contains("cat")
+    assert list_.contains("dog")
+    assert list_.contains("foo")
+    assert list_.contains("bar")
+    assert list_.contains("larry")
+    assert list_.contains("moe")
+    assert list_.contains("curly")
+    assert list_.contains(0)
+    assert list_.contains(100)
+    assert list_.contains(100.0)
 
-    assert not lst.contains("value")
-    assert not lst.contains(0.0)
-    assert not lst.contains(bytes())
+    assert not list_.contains("value")
+    assert not list_.contains(0.0)
+    assert not list_.contains(bytes())
 
 
 def test_enumerate_list():
-    result = lst.enumerate("dog")
+    result = list_.enumerate("dog")
     assert isinstance(result, GENERATOR_CLASS)
     result = zip(result, [2], [outer])
     for one, index, two in result:
@@ -167,7 +171,7 @@ def test_enumerate_list():
         assert index == i
         assert one is two
 
-    result = lst.enumerate("hello")
+    result = list_.enumerate("hello")
     assert isinstance(result, GENERATOR_CLASS)
     result = zip(result, [2, 3], [outer, inner])
     for one, index, two in result:
@@ -175,7 +179,7 @@ def test_enumerate_list():
         assert index == i
         assert one is two
 
-    result = lst.enumerate("hello", reverse=True)
+    result = list_.enumerate("hello", reverse=True)
     assert isinstance(result, GENERATOR_CLASS)
     result = zip(result, [3, 2], [inner, outer])
     for one, index, two in result:
@@ -183,7 +187,7 @@ def test_enumerate_list():
         assert index == i
         assert one is two
 
-    result = lst.enumerate("value")
+    result = list_.enumerate("value")
     assert isinstance(result, GENERATOR_CLASS)
     result = zip(result, [], [])
     for one, index, two in result:
@@ -193,115 +197,438 @@ def test_enumerate_list():
 
 
 def test_find_list():
-    result = lst.find("dog")
+    result = list_.find("dog")
     assert result is outer
 
-    result = lst.find("hello")
+    result = list_.find("hello")
     assert result is outer
 
-    result = lst.find("hello", reverse=True)
+    result = list_.find("hello", reverse=True)
     assert result is inner
 
     with pytest.raises(SearchError):
-        lst.find("value")
+        list_.find("value")
 
 
 def test_search_list():
-    result = lst.search("dog")
+    result = list_.search("dog")
     assert isinstance(result, SearchableList)
     result = zip(result, [outer])
     for one, two in result:
         assert one is two
 
-    result = lst.search("hello")
+    result = list_.search("hello")
     assert isinstance(result, SearchableList)
     result = zip(result, [outer, inner])
     for one, two in result:
         assert one is two
 
-    result = lst.search("hello", reverse=True)
+    result = list_.search("hello", reverse=True)
     assert isinstance(result, SearchableList)
     result = zip(result, [inner, outer])
     for one, two in result:
         assert one is two
 
     with pytest.raises(SearchError):
-        lst.search("value")
+        list_.search("value")
 
 
-def test_delete_index():
-    lst = SearchableList([other, normal, outer, inner, defined])
+def test_delete_list_index():
+    list_ = SearchableList([other, normal, outer, inner, defined])
     for i in range(5, VALUE_COUNT):
         with pytest.raises(IndexError):
-            del lst[i]
+            del list_[i]
 
-    assert lst == [other, normal, outer, inner, defined]
+    assert list_ == [other, normal, outer, inner, defined]
 
-    del lst[2]
-    assert lst == [other, normal, inner, defined]
+    del list_[2]
+    assert list_ == [other, normal, inner, defined]
 
-    del lst[0]
-    assert lst == [normal, inner, defined]
+    del list_[0]
+    assert list_ == [normal, inner, defined]
 
-    del lst[2]
-    assert lst == [normal, inner]
+    del list_[2]
+    assert list_ == [normal, inner]
 
-    del lst[1]
-    assert lst == [normal]
+    del list_[1]
+    assert list_ == [normal]
 
-    del lst[0]
-    assert lst == []
+    del list_[0]
+    assert list_ == []
 
 
-def test_delete_key():
-    lst = SearchableList([other, normal, outer, inner, defined])
-
-    with pytest.raises(SearchError):
-        del lst["value"]
+def test_delete_list_key():
+    list_ = SearchableList([other, normal, outer, inner, defined])
 
     with pytest.raises(SearchError):
-        del lst[0.0]
+        del list_["value"]
 
     with pytest.raises(SearchError):
-        del lst[bytes()]
-
-    assert lst == [other, normal, outer, inner, defined]
-
-    del lst["hello"]
-    assert lst == [other, normal, defined]
-
-    del lst[normal]
-    assert lst == [other, defined]
-
-    del lst["foo"]
-    assert lst == [defined]
-
-    del lst[defined]
-    assert lst == []
-
-
-def test_delete():
-    lst = SearchableList([other, normal, outer, inner, defined])
+        del list_[0.0]
 
     with pytest.raises(SearchError):
-        lst.delete("value")
+        del list_[bytes()]
+
+    assert list_ == [other, normal, outer, inner, defined]
+
+    del list_["hello"]
+    assert list_ == [other, normal, defined]
+
+    del list_[normal]
+    assert list_ == [other, defined]
+
+    del list_["foo"]
+    assert list_ == [defined]
+
+    del list_[defined]
+    assert list_ == []
+
+
+def test_list_delete():
+    list_ = SearchableList([other, normal, outer, inner, defined])
 
     with pytest.raises(SearchError):
-        lst.delete(0.0)
+        list_.delete("value")
 
     with pytest.raises(SearchError):
-        lst.delete(bytes())
+        list_.delete(0.0)
 
-    assert lst == [other, normal, outer, inner, defined]
+    with pytest.raises(SearchError):
+        list_.delete(bytes())
 
-    lst.delete("hello")
-    assert lst == [other, normal, defined]
+    assert list_ == [other, normal, outer, inner, defined]
 
-    lst.delete(normal)
-    assert lst == [other, defined]
+    list_.delete("hello")
+    assert list_ == [other, normal, defined]
 
-    lst.delete(0)
-    assert lst == [other]
+    list_.delete(normal)
+    assert list_ == [other, defined]
 
-    lst.delete("foo")
-    assert lst == []
+    list_.delete(0)
+    assert list_ == [other]
+
+    list_.delete("foo")
+    assert list_ == []
+
+
+# Set #
+
+def test_simple_set_membership():
+    assert other in set_
+    assert normal in set_
+    assert outer in set_
+    assert inner in set_
+    assert defined in set_
+
+
+def test_simple_set_contains():
+    assert set_.contains(other)
+    assert set_.contains(normal)
+    assert set_.contains(outer)
+    assert set_.contains(inner)
+    assert set_.contains(defined)
+
+
+def test_nested_set_membership():
+    assert "hello" in set_
+    assert "world" in set_
+    assert "cat" in set_
+    assert "dog" in set_
+    assert "foo" in set_
+    assert "bar" in set_
+    assert "larry" in set_
+    assert "moe" in set_
+    assert "curly" in set_
+    assert 0 in set_
+    assert 100 in set_
+    assert 100.0 in set_
+
+    assert "value" not in set_
+    assert 0.0 not in set_
+    assert bytes() not in set_
+
+
+def test_nested_set_contains():
+    assert set_.contains("hello")
+    assert set_.contains("world")
+    assert set_.contains("cat")
+    assert set_.contains("dog")
+    assert set_.contains("foo")
+    assert set_.contains("bar")
+    assert set_.contains("larry")
+    assert set_.contains("moe")
+    assert set_.contains("curly")
+    assert set_.contains(0)
+    assert set_.contains(100)
+    assert set_.contains(100.0)
+
+    assert not set_.contains("value")
+    assert not set_.contains(0.0)
+    assert not set_.contains(bytes())
+
+
+def test_enumerate_set():
+    result = set_.enumerate("dog")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = {outer}
+    assert expected == set(result)
+
+    result = set_.enumerate("hello")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = {outer, inner}
+    assert expected == set(result)
+
+    result = set_.enumerate("value")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = set()
+    assert expected == set(result)
+
+
+def test_find_set():
+    result = set_.find("dog")
+    assert result in {outer}
+
+    result = set_.find("hello")
+    assert result in {outer, inner}
+
+    with pytest.raises(SearchError):
+        set_.find("value")
+
+
+def test_search_set():
+    result = set_.search("dog")
+    assert isinstance(result, SearchableSet)
+    expected = {outer}
+    assert expected == set(result)
+
+    result = set_.search("hello")
+    assert isinstance(result, SearchableSet)
+    expected = {outer, inner}
+    assert expected == set(result)
+
+    with pytest.raises(SearchError):
+        set_.search("value")
+
+
+def test_delete_set_key():
+    set_ = SearchableSet({other, normal, outer, inner, defined})
+
+    with pytest.raises(SearchError):
+        del set_["value"]
+
+    with pytest.raises(SearchError):
+        del set_[0.0]
+
+    with pytest.raises(SearchError):
+        del set_[bytes()]
+
+    assert set_ == {other, normal, outer, inner, defined}
+
+    del set_["hello"]
+    assert set_ == {other, normal, defined}
+
+    del set_[normal]
+    assert set_ == {other, defined}
+
+    del set_["foo"]
+    assert set_ == {defined}
+
+    del set_[defined]
+    assert set_ == set()
+
+
+def test_set_delete():
+    set_ = SearchableSet({other, normal, outer, inner, defined})
+    with pytest.raises(SearchError):
+        set_.delete("value")
+
+    with pytest.raises(SearchError):
+        set_.delete(0.0)
+
+    with pytest.raises(SearchError):
+        set_.delete(bytes())
+
+    assert set_ == {other, normal, outer, inner, defined}
+
+    set_.delete("hello")
+    assert set_ == {other, normal, defined}
+
+    set_.delete(normal)
+    assert set_ == {other, defined}
+
+    set_.delete(0)
+    assert set_ == {other}
+
+    set_.delete("foo")
+    assert set_ == set()
+
+
+# Dictionary #
+
+def test_dict_key():
+    assert dict_[other] is outer
+    assert dict_[inner] is normal
+    assert dict_["value"] is defined
+
+    with pytest.raises(SearchError):
+        dict_["tionary"]
+
+
+def test_simple_dict_membership():
+    assert other in dict_
+    assert normal in dict_
+    assert outer in dict_
+    assert inner in dict_
+    assert "value" in dict_
+    assert defined in dict_
+
+
+def test_simple_dict_contains():
+    assert dict_.contains(other)
+    assert dict_.contains(normal)
+    assert dict_.contains(outer)
+    assert dict_.contains(inner)
+    assert dict_.contains("value")
+    assert dict_.contains(defined)
+
+
+def test_nested_dict_membership():
+    assert "hello" in dict_
+    assert "world" in dict_
+    assert "cat" in dict_
+    assert "dog" in dict_
+    assert "foo" in dict_
+    assert "bar" in dict_
+    assert "larry" in dict_
+    assert "moe" in dict_
+    assert "curly" in dict_
+    assert 0 in dict_
+    assert 100 in dict_
+    assert 100.0 in dict_
+    assert "value" in dict_
+
+    assert "tionary" not in dict_
+    assert 0.0 not in dict_
+    assert bytes() not in dict_
+
+
+def test_nested_dict_contains():
+    assert dict_.contains("hello")
+    assert dict_.contains("world")
+    assert dict_.contains("cat")
+    assert dict_.contains("dog")
+    assert dict_.contains("foo")
+    assert dict_.contains("bar")
+    assert dict_.contains("larry")
+    assert dict_.contains("moe")
+    assert dict_.contains("curly")
+    assert dict_.contains(0)
+    assert dict_.contains(100)
+    assert dict_.contains(100.0)
+    assert dict_.contains("value")
+
+    assert not dict_.contains("tionary")
+    assert not dict_.contains(0.0)
+    assert not dict_.contains(bytes())
+
+
+def test_enumerate_dict():
+    result = dict_.enumerate("dog")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = {(other, outer)}
+    assert expected == set(result)
+
+    result = dict_.enumerate("hello")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = {(other, outer), (inner, normal)}
+    assert expected == set(result)
+
+    result = dict_.enumerate("tionary")
+    assert isinstance(result, GENERATOR_CLASS)
+    expected = set()
+    assert expected == set(result)
+
+
+def test_find_dict():
+    result = dict_.find("dog")
+    assert result in {(other, outer)}
+
+    result = dict_.find("hello")
+    assert result in {(other, outer), (inner, normal)}
+
+    with pytest.raises(SearchError):
+        dict_.find("tionary")
+
+
+def test_search_dict():
+    result = dict_.search("dog")
+    assert isinstance(result, SearchableDictionary)
+    expected = {other: outer}
+    assert expected == result
+
+    result = dict_.search("hello")
+    assert isinstance(result, SearchableDictionary)
+    expected = {other: outer, inner: normal}
+    assert expected == result
+
+    with pytest.raises(SearchError):
+        dict_.search("tionary")
+
+
+def test_delete_dict_normal():
+    dict_ = SearchableDictionary({other: outer, inner: normal, "value": defined})
+    with pytest.raises(SearchError):
+        del dict_["tionary"]
+
+    assert dict_ == {other: outer, inner: normal, "value": defined}
+
+    del dict_[other]
+    assert dict_ == {inner: normal, "value": defined}
+
+    del dict_["value"]
+    assert dict_ == {inner: normal}
+
+    del dict_[inner]
+    assert dict_ == {}
+
+
+def test_delete_dict_key():
+    dict_ = SearchableDictionary({other: outer, inner: normal, "value": defined})
+
+    with pytest.raises(SearchError):
+        del dict_["tionary"]
+
+    with pytest.raises(SearchError):
+        del dict_[0.0]
+
+    with pytest.raises(SearchError):
+        del dict_[bytes()]
+
+    assert dict_ == {other: outer, inner: normal, "value": defined}
+
+    del dict_["hello"]
+    assert dict_ == {"value": defined}
+
+    del dict_[defined]
+    assert dict_ == {}
+
+
+def test_dict_delete():
+    dict_ = SearchableDictionary({other: outer, inner: normal, "value": defined})
+
+    with pytest.raises(SearchError):
+        dict_.delete("tionary")
+
+    with pytest.raises(SearchError):
+        dict_.delete(0.0)
+
+    with pytest.raises(SearchError):
+        dict_.delete(bytes())
+
+    assert dict_ == {other: outer, inner: normal, "value": defined}
+
+    dict_.delete("hello")
+    assert dict_ == {"value": defined}
+
+    dict_.delete(defined)
+    assert dict_ == {}

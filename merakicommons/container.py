@@ -110,7 +110,7 @@ class SearchableList(list):
         if results == 0:
             raise SearchError(str(item))
 
-    def search(self, item: Any, streaming: bool = False, reverse: bool = False) -> Any:
+    def search(self, item: Any, streaming: bool = False, reverse: bool = False) -> Union["SearchableList", Generator[Any, None, None]]:
         if streaming:
             return self._search_generator(item, reverse=reverse)
         else:
@@ -153,3 +153,156 @@ class SearchableList(list):
             deleted += 1
         if deleted == 0:
             raise SearchError(str(item))
+
+
+class SearchableSet(set):
+    def __getitem__(self, item: Any) -> Any:
+        return self.find(item)
+
+    def __contains__(self, item: Any) -> bool:
+        return self.contains(item)
+
+    def __delitem__(self, item: Any) -> None:
+        self.delete(item)
+
+    def _search_generator(self, item: Any) -> Generator[Any, None, None]:
+        results = 0
+        for x in self.enumerate(item):
+            yield x
+            results += 1
+        if results == 0:
+            raise SearchError(str(item))
+
+    def search(self, item: Any, streaming: bool = False) -> Union["SearchableSet", Generator[Any, None, None]]:
+        if streaming:
+            return self._search_generator(item)
+        else:
+            result = SearchableSet(self.enumerate(item))
+            if len(result) == 0:
+                raise SearchError(str(item))
+            return result
+
+    def find(self, item: Any) -> Any:
+        for x in self.enumerate(item):
+            return x
+        raise SearchError(str(item))
+
+    def contains(self, item: Any) -> bool:
+        for _ in self.enumerate(item):
+            return True
+        return False
+
+    def enumerate(self, item: Any) -> Generator[Any, None, None]:
+        for x in self:
+            if x == item:
+                yield x
+                continue
+
+            try:
+                if item in x:
+                    yield x
+            except TypeError:
+                # x doesn't define __contains__
+                pass
+
+    def delete(self, item: Any) -> None:
+        to_delete = set(self.enumerate(item))
+        if len(to_delete) == 0:
+            raise SearchError(str(item))
+        for x in to_delete:
+            self.remove(x)
+
+
+class SearchableDictionary(dict):
+    def __getitem__(self, item: Any) -> Any:
+        try:
+            return super().__getitem__(item)
+        except KeyError:
+            return self.find(item)
+
+    def __contains__(self, item: Any) -> bool:
+        return self.contains(item)
+
+    def __delitem__(self, item: Any) -> None:
+        try:
+            super().__delitem__(item)
+        except KeyError:
+            self.delete(item)
+
+    def _search_generator(self, item: Any) -> Generator[Tuple[Any, Any], None, None]:
+        results = 0
+        for key, value in self.enumerate(item):
+            yield key, value
+            results += 1
+        if results == 0:
+            raise SearchError(str(item))
+
+    def search(self, item: Any, streaming: bool = False) -> Union["SearchableDictionary", Generator[Tuple[Any, Any], None, None]]:
+        if streaming:
+            return self._search_generator(item)
+        else:
+            result = SearchableDictionary(self.enumerate(item))
+            if len(result) == 0:
+                raise SearchError(str(item))
+            return result
+
+    def find(self, item: Any) -> Tuple[Any, Any]:
+        for key, value in self.items():
+            if key == item:
+                return key, value
+
+            try:
+                if item in key:
+                    return key, value
+            except TypeError:
+                # key doesn't define __contains__
+                pass
+
+            if value == item:
+                return key, value
+
+            try:
+                if item in value:
+                    return key, value
+            except TypeError:
+                # value doesn't define __contains__
+                pass
+        raise SearchError(str(item))
+
+    def contains(self, item: Any) -> bool:
+        for _, _ in self.enumerate(item):
+            return True
+        return False
+
+    def enumerate(self, item: Any) -> Generator[Tuple[Any, Any], None, None]:
+        for key, value in self.items():
+            if key == item:
+                yield key, value
+                continue
+
+            try:
+                if item in key:
+                    yield key, value
+                    continue
+            except TypeError:
+                # key doesn't define __contains__
+                pass
+
+            if value == item:
+                yield key, value
+                continue
+
+            try:
+                if item in value:
+                    yield key, value
+                    continue
+            except TypeError:
+                # value doesn't define __contains__
+                pass
+
+    def delete(self, item: Any) -> None:
+        to_delete = {key for key, _ in self.enumerate(item)}
+        if len(to_delete) == 0:
+            raise SearchError(str(item))
+        for key in to_delete:
+            del self[key]
