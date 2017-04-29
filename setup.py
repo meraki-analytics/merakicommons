@@ -9,10 +9,10 @@ with open(path.join(here, "README.rst"), encoding="UTF-8") as readme:
 
 setup(
     name="merakicommons",
-    version="0.0.1.dev2",
+    version="0.0.1.dev3",
     author="Meraki Analytics Team",
     author_email="team@merakianalytics.com",
-    url="https://github.com/meraki-analytics/datapipelines",
+    url="https://github.com/meraki-analytics/merakicommons",
     description="Common toolset for Meraki Analaytics projects",
     long_description=long_description,
     classifiers=[
