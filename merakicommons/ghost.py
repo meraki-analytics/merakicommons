@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from sys import _getframe
-from typing import Any, Callable
+from typing import Callable
 
 
 class GhostAttributeError(AttributeError):
     pass
+
 
 class Ghost(ABC):
     @staticmethod
@@ -37,7 +37,6 @@ class Ghost(ABC):
             tb = tb.tb_next
 
     def __custom_getattr__(self, attr, error):
-        #_, _, tb = sys.exc_info()  This seems to work if we don't want to pass in the error
         tb = error.__traceback__
         calling_method = self._search_traceback_for_ghost_property(tb)
         if calling_method is not None:
