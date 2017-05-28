@@ -5,7 +5,7 @@ from weakref import WeakKeyDictionary
 T = TypeVar("T")
 
 
-def lazy_property(method: Callable[[Any], T]) -> property:
+def lazy(method: Callable[[Any], T]) -> property:
     values = WeakKeyDictionary()
 
     @wraps(method)
@@ -24,4 +24,8 @@ def lazy_property(method: Callable[[Any], T]) -> property:
 
     wrapper._lazy_reset = _lazy_reset
 
-    return property(wrapper)
+    return wrapper
+
+
+def lazy_property(method: Callable[[Any], T]) -> property:
+    return property(lazy(method))
