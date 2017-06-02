@@ -48,14 +48,13 @@ def test_permit_count():
 
 
 def test_acquire_timing():
-    from time import clock
-    clock()
+    from time import time
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
     times = []
     for _ in range(VALUE_COUNT):
         with limiter.acquire():
-            times.append(clock())
+            times.append(time())
 
     start_indexes = [i for i in range(VALUE_COUNT) if i % PERMITS == 0]
 
@@ -66,14 +65,13 @@ def test_acquire_timing():
 
 
 def test_decorator_timing():
-    from time import clock
-    clock()
+    from time import time
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
 
     @limiter.limit
     def call():
-        return clock()
+        return time()
 
     times = []
     for _ in range(VALUE_COUNT):
@@ -88,16 +86,34 @@ def test_decorator_timing():
 
 
 def test_acquire_across_windows():
-    from time import clock, sleep
+    from time import time, sleep
 
     limiter = FixedWindowRateLimiter(SECONDS, 1)
 
     # This should take up two fixed windows for the first task, and the second shouldn't execute until the third (after 2 x SECONDS).
-    start = clock()
     with limiter.acquire():
+        first = time()
         sleep(SECONDS * 1.25)
 
     with limiter.acquire():
-        time = clock()
+        second = time()
 
-    assert time - start >= (SECONDS - EPSILON) * 2
+    assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
+
+
+def test_decorator_across_windows():
+    from time import time, sleep
+
+    limiter = FixedWindowRateLimiter(SECONDS, 1)
+
+    @limiter.limit
+    def call():
+        t = time()
+        sleep(SECONDS * 1.25)
+        return t
+
+    # This should take up two fixed windows for the first task, and the second shouldn't execute until the third (after 2 x SECONDS).
+    first = call()
+    second = call()
+
+    assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
