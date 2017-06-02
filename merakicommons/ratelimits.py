@@ -66,7 +66,11 @@ class FixedWindowRateLimiter(RateLimiter):
             self._currently_processing += 1
 
         # Yield to processing
-        yield
+        error = None
+        try:
+            yield
+        except Exception as e:
+            error = e
 
         # Decrement current count
         with self._currently_processing_lock:
@@ -78,6 +82,9 @@ class FixedWindowRateLimiter(RateLimiter):
                 self._resetter = Timer(self._window_seconds, self._reset)
                 self._resetter.daemon = True
                 self._resetter.start()
+
+        if error:
+            raise error
 
     def _reset(self):
         with self._resetter_lock:
