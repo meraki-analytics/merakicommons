@@ -1,14 +1,21 @@
-from merakicommons.ratelimits import FixedWindowRateLimiter
+from merakicommons.ratelimits import FixedWindowRateLimiter, TokenBucketRateLimiter
 
 SECONDS = 1
 PERMITS = 5
+BURST = 2
+TOKENS = SECONDS / PERMITS
+
 MANY_PERMITS = 100000000
 VALUE_COUNT = 25
 LARGE_VALUE_COUNT = 10000
 EPSILON = 0.0001  # threading.Timer isn't super precise so we allow some jitter in expected time comparisons
 
+##########################
+# FixedWindowRateLimiter #
+##########################
 
-def test_acquire_simple():
+
+def test_window_acquire_simple():
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
     x = False
     with limiter.acquire():
@@ -16,7 +23,7 @@ def test_acquire_simple():
     assert x
 
 
-def test_decorator_simple():
+def test_window_decorator_simple():
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
 
     @limiter.limit
@@ -26,7 +33,7 @@ def test_decorator_simple():
     assert call()
 
 
-def test_permit_count():
+def test_window_permit_count():
     limiter = FixedWindowRateLimiter(SECONDS, MANY_PERMITS)
     assert limiter.permits_issued == 0
 
@@ -47,7 +54,7 @@ def test_permit_count():
         assert limiter.permits_issued == i + 1
 
 
-def test_acquire_timing():
+def test_window_acquire_timing():
     from time import time
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
@@ -64,7 +71,7 @@ def test_acquire_timing():
         last = times[index]
 
 
-def test_decorator_timing():
+def test_window_decorator_timing():
     from time import time
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
@@ -85,7 +92,7 @@ def test_decorator_timing():
         last = times[index]
 
 
-def test_acquire_across_windows():
+def test_window_acquire_across_windows():
     from time import time, sleep
 
     limiter = FixedWindowRateLimiter(SECONDS, 1)
@@ -101,7 +108,7 @@ def test_acquire_across_windows():
     assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
 
 
-def test_decorator_across_windows():
+def test_window_decorator_across_windows():
     from time import time, sleep
 
     limiter = FixedWindowRateLimiter(SECONDS, 1)
@@ -117,3 +124,86 @@ def test_decorator_across_windows():
     second = call()
 
     assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
+
+##########################
+# TokenBucketRateLimiter #
+##########################
+
+
+def test_bucket_acquire_simple():
+    limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+    x = False
+    with limiter.acquire():
+        x = True
+    assert x
+
+
+def test_bucket_decorator_simple():
+    limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+
+    @limiter.limit
+    def call():
+        return True
+
+    assert call()
+
+
+def test_bucket_permit_count():
+    limiter = TokenBucketRateLimiter(SECONDS, MANY_PERMITS, MANY_PERMITS, SECONDS)
+    assert limiter.permits_issued == 0
+
+    @limiter.limit
+    def call():
+        pass
+
+    for i in range(LARGE_VALUE_COUNT // 2):
+        with limiter.acquire():
+            pass
+        assert limiter.permits_issued == i + 1
+
+    limiter.reset_permits_issued()
+    assert limiter.permits_issued == 0
+
+    for i in range(LARGE_VALUE_COUNT // 2):
+        call()
+        assert limiter.permits_issued == i + 1
+
+
+def test_bucket_acquire_timing():
+    from time import time
+
+    limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+    times = []
+    for _ in range(VALUE_COUNT):
+        with limiter.acquire():
+            times.append(time())
+
+    frequency = SECONDS / PERMITS
+    for i in range(BURST - 1):
+        assert times[i + 1] - times[i] < frequency - EPSILON
+
+    times = times[BURST:]
+    for i in range(len(times) - 1):
+        assert 2 * (frequency - EPSILON) > times[i + 1] - times[i] > frequency - EPSILON
+
+
+def test_bucket_decorator_timing():
+    from time import time
+
+    limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+
+    @limiter.limit
+    def call():
+        return time()
+
+    times = []
+    for _ in range(VALUE_COUNT):
+        times.append(call())
+
+    frequency = SECONDS / PERMITS
+    for i in range(BURST - 1):
+        assert times[i + 1] - times[i] < frequency - EPSILON
+
+    times = times[BURST:]
+    for i in range(len(times) - 1):
+        assert 2 * (frequency - EPSILON) > times[i + 1] - times[i] > frequency - EPSILON
