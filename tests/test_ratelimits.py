@@ -1,7 +1,7 @@
 from merakicommons.ratelimits import FixedWindowRateLimiter, TokenBucketRateLimiter
 
 SECONDS = 1
-PERMITS = 5
+PERMITS = 6
 BURST = 2
 TOKENS = SECONDS / PERMITS
 

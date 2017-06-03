@@ -93,7 +93,7 @@ class FixedWindowRateLimiter(RateLimiter):
                 try:
                     self._permitter.release()
                 except RuntimeError:
-                    # Wasn't out of permits
+                    # Wasn't waiting on any acquire
                     pass
 
     @property
@@ -117,7 +117,10 @@ class TokenBucketRateLimiter(RateLimiter):
         self._epoch_seconds = epoch_seconds
         self._epoch_permits = epoch_permits
 
-        self._bucket = BoundedSemaphore(max_burst)
+        self._permitter = Lock()
+        self._token_limit = max_burst
+        self._tokens = max_burst
+        self._tokens_lock = Lock()
 
         self._token_update = token_update_frequency
 
@@ -129,8 +132,12 @@ class TokenBucketRateLimiter(RateLimiter):
 
     @contextmanager
     def acquire(self) -> AbstractContextManager:
-        # Get a token
-        self._bucket.acquire()
+        # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
+        self._permitter.acquire()
+        with self._tokens_lock:
+            self._tokens -= 1
+            if self._tokens > 0:
+                self._permitter.release()
 
         # Increment total count
         with self._total_permits_issued_lock:
@@ -162,18 +169,20 @@ class TokenBucketRateLimiter(RateLimiter):
         while segments_full < segments_per_epoch:
             sleep(self._token_update)
 
-            # If the first release attempt fails, the bucket was full
-            try:
-                self._bucket.release()
-            except ValueError:
-                segments_full += 1
-
-            # Add the rest of the new tokens
-            for _ in range(tokens_per_segment - 1):
-                try:
-                    self._bucket.release()
-                except ValueError:
-                    break
+            with self._tokens_lock:
+                if self._tokens == self._token_limit:
+                    segments_full += 1
+                elif self._tokens == 0:
+                    self._tokens = min(tokens_per_segment, self._token_limit)
+                    segments_full = 0
+                    try:
+                        self._permitter.release()
+                    except RuntimeError:
+                        # Wasn't waiting on any acquire
+                        pass
+                else:
+                    self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
+                    segments_full = 0
 
         # Clean up
         with self._token_provider_lock:
