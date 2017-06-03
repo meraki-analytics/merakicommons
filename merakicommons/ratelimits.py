@@ -2,7 +2,7 @@ from typing import Callable
 from time import sleep
 from math import ceil
 from abc import ABC, abstractmethod
-from contextlib import contextmanager, AbstractContextManager
+from contextlib import contextmanager, _GeneratorContextManager
 from threading import Lock, Timer, Thread
 
 
@@ -17,7 +17,7 @@ class RateLimiter(ABC):
         pass
 
     @abstractmethod
-    def acquire(self) -> AbstractContextManager:
+    def acquire(self) -> _GeneratorContextManager:
         pass
 
     def limit(self, method: Callable) -> Callable:
@@ -46,7 +46,7 @@ class FixedWindowRateLimiter(RateLimiter):
         self._resetter_lock = Lock()
 
     @contextmanager
-    def acquire(self) -> AbstractContextManager:
+    def acquire(self) -> _GeneratorContextManager:
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         self._permitter.acquire()
         with self._permits_lock:
@@ -131,7 +131,7 @@ class TokenBucketRateLimiter(RateLimiter):
         self._total_permits_issued_lock = Lock()
 
     @contextmanager
-    def acquire(self) -> AbstractContextManager:
+    def acquire(self) -> _GeneratorContextManager:
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         self._permitter.acquire()
         with self._tokens_lock:
