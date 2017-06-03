@@ -3,7 +3,7 @@ from time import sleep
 from math import ceil
 from abc import ABC, abstractmethod
 from contextlib import contextmanager, AbstractContextManager
-from threading import Lock, Timer, BoundedSemaphore, Thread
+from threading import Lock, Timer, Thread
 
 
 class RateLimiter(ABC):
