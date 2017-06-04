@@ -2,7 +2,6 @@ from typing import Callable
 from time import sleep
 from math import ceil
 from abc import ABC, abstractmethod
-from contextlib import contextmanager, _GeneratorContextManager
 from threading import Lock, Timer, Thread
 
 
@@ -17,12 +16,16 @@ class RateLimiter(ABC):
         pass
 
     @abstractmethod
-    def acquire(self) -> _GeneratorContextManager:
+    def __enter__(self) -> "RateLimiter":
+        pass
+
+    @abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         pass
 
     def limit(self, method: Callable) -> Callable:
         def limited(*args, **kwargs):
-            with self.acquire():
+            with self:
                 return method(*args, **kwargs)
         return limited
 
@@ -45,8 +48,7 @@ class FixedWindowRateLimiter(RateLimiter):
         self._resetter = None
         self._resetter_lock = Lock()
 
-    @contextmanager
-    def acquire(self) -> _GeneratorContextManager:
+    def __enter__(self) -> "FixedWindowRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         self._permitter.acquire()
         with self._permits_lock:
@@ -62,13 +64,9 @@ class FixedWindowRateLimiter(RateLimiter):
         with self._currently_processing_lock:
             self._currently_processing += 1
 
-        # Yield to processing
-        error = None
-        try:
-            yield
-        except Exception as e:
-            error = e
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # Decrement current count
         with self._currently_processing_lock:
             self._currently_processing -= 1
@@ -79,9 +77,6 @@ class FixedWindowRateLimiter(RateLimiter):
                 self._resetter = Timer(self._window_seconds, self._reset)
                 self._resetter.daemon = True
                 self._resetter.start()
-
-        if error:
-            raise error
 
     def _reset(self):
         with self._resetter_lock:
@@ -130,8 +125,7 @@ class TokenBucketRateLimiter(RateLimiter):
         self._total_permits_issued = 0
         self._total_permits_issued_lock = Lock()
 
-    @contextmanager
-    def acquire(self) -> _GeneratorContextManager:
+    def __enter__(self) -> "TokenBucketRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         self._permitter.acquire()
         with self._tokens_lock:
@@ -143,22 +137,15 @@ class TokenBucketRateLimiter(RateLimiter):
         with self._total_permits_issued_lock:
             self._total_permits_issued += 1
 
-        # Yield to processing
-        error = None
-        try:
-            yield
-        except Exception as e:
-            error = e
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # We don't want a thread sitting around dumping tokens into a filled bucket during downtimes. We construct one when needed and it cleans itself up if the bucket is full for an entire epoch.
         with self._token_provider_lock:
             if not self._token_provider:
                 self._token_provider = Thread(target=self._provide_tokens)
                 self._token_provider.daemon = True
                 self._token_provider.start()
-
-        if error:
-            raise error
 
     def _provide_tokens(self):
         tokens_per_segment = int(self._epoch_permits // (self._epoch_seconds / self._token_update))

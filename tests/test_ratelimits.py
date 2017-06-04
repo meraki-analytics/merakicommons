@@ -18,7 +18,7 @@ EPSILON = 0.0001  # threading.Timer isn't super precise so we allow some jitter 
 def test_window_acquire_simple():
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
     x = False
-    with limiter.acquire():
+    with limiter:
         x = True
     assert x
 
@@ -42,7 +42,7 @@ def test_window_permit_count():
         pass
 
     for i in range(LARGE_VALUE_COUNT // 2):
-        with limiter.acquire():
+        with limiter:
             pass
         assert limiter.permits_issued == i + 1
 
@@ -60,7 +60,7 @@ def test_window_acquire_timing():
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
     times = []
     for _ in range(VALUE_COUNT):
-        with limiter.acquire():
+        with limiter:
             times.append(time())
 
     start_indexes = [i for i in range(VALUE_COUNT) if i % PERMITS == 0]
@@ -98,11 +98,11 @@ def test_window_acquire_across_windows():
     limiter = FixedWindowRateLimiter(SECONDS, 1)
 
     # This should take up two fixed windows for the first task, and the second shouldn't execute until the third (after 2 x SECONDS).
-    with limiter.acquire():
+    with limiter:
         first = time()
         sleep(SECONDS * 1.25)
 
-    with limiter.acquire():
+    with limiter:
         second = time()
 
     assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
@@ -133,7 +133,7 @@ def test_window_decorator_across_windows():
 def test_bucket_acquire_simple():
     limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
     x = False
-    with limiter.acquire():
+    with limiter:
         x = True
     assert x
 
@@ -157,7 +157,7 @@ def test_bucket_permit_count():
         pass
 
     for i in range(LARGE_VALUE_COUNT // 2):
-        with limiter.acquire():
+        with limiter:
             pass
         assert limiter.permits_issued == i + 1
 
@@ -175,7 +175,7 @@ def test_bucket_acquire_timing():
     limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
     times = []
     for _ in range(VALUE_COUNT):
-        with limiter.acquire():
+        with limiter:
             times.append(time())
 
     frequency = SECONDS / PERMITS
