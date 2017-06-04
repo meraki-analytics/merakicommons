@@ -159,14 +159,15 @@ class TokenBucketRateLimiter(RateLimiter):
             with self._tokens_lock:
                 if self._tokens == self._token_limit:
                     segments_full += 1
-                elif self._tokens == 0:
-                    self._tokens = min(tokens_per_segment, self._token_limit)
+                elif self._tokens < 1:
+                    self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
                     segments_full = 0
-                    try:
-                        self._permitter.release()
-                    except RuntimeError:
-                        # Wasn't waiting on any acquire
-                        pass
+                    if self._tokens >= 1:
+                        try:
+                            self._permitter.release()
+                        except RuntimeError:
+                            # Wasn't waiting on any acquire
+                            pass
                 else:
                     self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
                     segments_full = 0
