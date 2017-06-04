@@ -130,7 +130,7 @@ class TokenBucketRateLimiter(RateLimiter):
         self._permitter.acquire()
         with self._tokens_lock:
             self._tokens -= 1
-            if self._tokens > 0:
+            if self._tokens >= 1:
                 self._permitter.release()
 
         # Increment total count
@@ -148,7 +148,7 @@ class TokenBucketRateLimiter(RateLimiter):
                 self._token_provider.start()
 
     def _provide_tokens(self):
-        tokens_per_segment = int(self._epoch_permits // (self._epoch_seconds / self._token_update))
+        tokens_per_segment = self._epoch_permits / (self._epoch_seconds / self._token_update)
         segments_full = 0
 
         # If we go an entire epoch with a full bucket we'll stop this provider
