@@ -79,9 +79,6 @@ class FixedWindowRateLimiter(RateLimiter):
                 self._resetter.start()
 
     def _reset(self):
-        with self._resetter_lock:
-            self._resetter = None
-
         with self._permits_lock:
             with self._currently_processing_lock:
                 self._permits = self._window_permits - self._currently_processing
@@ -90,6 +87,9 @@ class FixedWindowRateLimiter(RateLimiter):
                 except RuntimeError:
                     # Wasn't waiting on any acquire
                     pass
+
+            with self._resetter_lock:
+                self._resetter = None
 
     @property
     def permits_issued(self) -> int:
