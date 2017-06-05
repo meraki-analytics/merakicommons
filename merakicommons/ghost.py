@@ -8,8 +8,8 @@ give at init will not trigger a load.
 Creating a Ghost object:
 
 Ghost objects should have property methods that are decorated with `@Ghost.property`, indicating that the underlying
-method is a property and should be ghost loaded if it throws an attribute error (i.e. if the data it is accessing does
-not exist).  `Ghost.property` methods should therefore not intentionally throw attribute errors.
+method is a property and should be ghost loaded if it throws a GhostLoadingRequiredError (i.e. if the data it is
+accessing does not exist).
 
 `Ghost.property` takes an optional argument specifying which load group it belongs to. Methods that belong to the same
 load group will be tagged as loaded when any one of the methods triggers a load. If a load group is not given to the
@@ -19,17 +19,30 @@ The object must define a `__load__` method which sets the necessary data on the 
 
 If an object is instantiated with all of its data, it is not considered loaded.
 
-Methods cannot be ghost loaded because it is impossible to know if the method with throw an attribute error a priori.
+Methods cannot be ghost loaded because it is impossible to know if the method will fail a priori.
 Therefore `Ghost.method` does not exist, and only properties can use ghost loading.
 """
 from abc import abstractmethod
 from typing import Callable, Union, Any
+import functools
 
 from merakicommons.cache import lazy_property
 
 
 class GhostLoadingRequiredError(Exception):
     pass
+
+
+def ghost_load_on(*errors):
+    def decorator(method):
+        @functools.wraps(method)
+        def wrapper(*args, **kwargs):
+            try:
+                return method(*args, **kwargs)
+            except errors as error:
+                raise GhostLoadingRequiredError(str(error))
+        return wrapper
+    return decorator
 
 
 class Ghost(object):
