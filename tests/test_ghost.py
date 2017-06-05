@@ -62,7 +62,7 @@ def test_bad_value():
     for _ in range(VALUE_COUNT):
         with pytest.raises(AttributeError):
             x.bad_value
-        assert x.last_loaded == None
+        assert x.last_loaded is None
 
 
 def test_ghost_load_normal_attribute():
@@ -108,4 +108,4 @@ def test_ghost_load_bad_value():
         with pytest.raises(AttributeError):
             x.bad_value
         assert x.load_calls == 0
-        assert x.last_loaded == None
+        assert x.last_loaded is None
