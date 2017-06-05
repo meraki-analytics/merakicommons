@@ -11,31 +11,35 @@ class GhostObject(Ghost):
         self.load_calls = 0
         self.last_loaded = None
 
-    def _load(self, attribute: str) -> None:
+    def __load__(self, load_group) -> None:
         self.load_calls += 1
         self._value = TEST_VALUE
-        self.last_loaded = attribute
+        self.last_loaded = load_group
 
-    @Ghost.load_on
+    @Ghost.property
     def value(self) -> str:
         return self._value
 
-    @Ghost.load_on
+    @Ghost.property
     def constant_value(self) -> str:
         return TEST_VALUE
 
-    @Ghost.load_on
+    @Ghost.property
     def bad_value(self) -> None:
         return self._bad_value
 
+    @property
     def unloaded_value(self) -> str:
         return TEST_VALUE
 
+    def unloaded_method(self) -> str:
+        return TEST_VALUE
 
-def test_ghost_value():
+
+def test_ghost_property():
     x = GhostObject()
     for _ in range(VALUE_COUNT):
-        value = x.value()
+        value = x.value
         assert type(value) is type(TEST_VALUE)
         assert value == TEST_VALUE
         assert x.last_loaded == "value"
@@ -44,7 +48,7 @@ def test_ghost_value():
 def test_constant_value():
     x = GhostObject()
     for _ in range(VALUE_COUNT):
-        value = x.constant_value()
+        value = x.constant_value
         assert type(value) is type(TEST_VALUE)
         assert value == TEST_VALUE
         assert x.last_loaded is None
@@ -54,7 +58,7 @@ def test_bad_value():
     x = GhostObject()
     for _ in range(VALUE_COUNT):
         with pytest.raises(AttributeError):
-            x.bad_value()
+            x.bad_value
         assert x.last_loaded == "bad_value"
 
 
@@ -68,12 +72,7 @@ def test_ghost_load_normal_attribute():
         assert x.last_loaded is None
 
     for _ in range(VALUE_COUNT):
-        x.unloaded_value()
-        assert x.load_calls == 0
-        assert x.last_loaded is None
-
-    for _ in range(VALUE_COUNT):
-        x.unloaded_value
+        x.unloaded_method()
         assert x.load_calls == 0
         assert x.last_loaded is None
 
@@ -81,16 +80,6 @@ def test_ghost_load_normal_attribute():
 def test_ghost_load_required():
     x = GhostObject()
     assert x.load_calls == 0
-
-    for _ in range(VALUE_COUNT):
-        x.value
-        assert x.load_calls == 0
-        assert x.last_loaded is None
-
-    for _ in range(VALUE_COUNT):
-        x.value()
-        assert x.load_calls == 1
-        assert x.last_loaded == "value"
 
     for _ in range(VALUE_COUNT):
         x.value
@@ -107,33 +96,13 @@ def test_ghost_load_not_required():
         assert x.load_calls == 0
         assert x.last_loaded is None
 
-    for _ in range(VALUE_COUNT):
-        x.constant_value()
-        assert x.load_calls == 0
-        assert x.last_loaded is None
-
-    for _ in range(VALUE_COUNT):
-        x.constant_value
-        assert x.load_calls == 0
-        assert x.last_loaded is None
-
 
 def test_ghost_load_bad_value():
     x = GhostObject()
     assert x.load_calls == 0
 
-    for _ in range(VALUE_COUNT):
-        x.bad_value
-        assert x.load_calls == 0
-        assert x.last_loaded is None
-
     for count in range(VALUE_COUNT):
         with pytest.raises(AttributeError):
-            x.bad_value()
-        assert x.load_calls == count + 1
-        assert x.last_loaded == "bad_value"
-
-    for _ in range(VALUE_COUNT):
-        x.bad_value
+            x.bad_value
         assert x.load_calls == count + 1
         assert x.last_loaded == "bad_value"
