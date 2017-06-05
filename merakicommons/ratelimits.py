@@ -1,5 +1,5 @@
 from typing import Callable
-from time import sleep
+from time import sleep, monotonic
 from math import ceil
 from abc import ABC, abstractmethod
 from threading import Lock, Timer, Thread
@@ -151,10 +151,14 @@ class TokenBucketRateLimiter(RateLimiter):
         tokens_per_segment = self._epoch_permits / (self._epoch_seconds / self._token_update)
         segments_full = 0
 
+        start_time = monotonic()
+        next_time = start_time + self._token_update
+
         # If we go an entire epoch with a full bucket we'll stop this provider
         segments_per_epoch = int(ceil(self._epoch_seconds / self._token_update))
         while segments_full < segments_per_epoch:
-            sleep(self._token_update)
+            sleep(max(next_time - monotonic(), 0))
+            next_time = next_time + self._token_update
 
             with self._tokens_lock:
                 if self._tokens == self._token_limit:

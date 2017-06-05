@@ -55,13 +55,13 @@ def test_window_permit_count():
 
 
 def test_window_acquire_timing():
-    from time import time
+    from time import monotonic
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
     times = []
     for _ in range(VALUE_COUNT):
         with limiter:
-            times.append(time())
+            times.append(monotonic())
 
     start_indexes = [i for i in range(VALUE_COUNT) if i % PERMITS == 0]
 
@@ -72,13 +72,13 @@ def test_window_acquire_timing():
 
 
 def test_window_decorator_timing():
-    from time import time
+    from time import monotonic
 
     limiter = FixedWindowRateLimiter(SECONDS, PERMITS)
 
     @limiter.limit
     def call():
-        return time()
+        return monotonic()
 
     times = []
     for _ in range(VALUE_COUNT):
@@ -93,29 +93,29 @@ def test_window_decorator_timing():
 
 
 def test_window_acquire_across_windows():
-    from time import time, sleep
+    from time import monotonic, sleep
 
     limiter = FixedWindowRateLimiter(SECONDS, 1)
 
     # This should take up two fixed windows for the first task, and the second shouldn't execute until the third (after 2 x SECONDS).
     with limiter:
-        first = time()
+        first = monotonic()
         sleep(SECONDS * 1.25)
 
     with limiter:
-        second = time()
+        second = monotonic()
 
     assert (SECONDS - EPSILON) * 3 >= second - first >= (SECONDS - EPSILON) * 2
 
 
 def test_window_decorator_across_windows():
-    from time import time, sleep
+    from time import monotonic, sleep
 
     limiter = FixedWindowRateLimiter(SECONDS, 1)
 
     @limiter.limit
     def call():
-        t = time()
+        t = monotonic()
         sleep(SECONDS * 1.25)
         return t
 
@@ -170,40 +170,58 @@ def test_bucket_permit_count():
 
 
 def test_bucket_acquire_timing():
-    from time import time
+    from time import monotonic
 
     limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
     times = []
     for _ in range(VALUE_COUNT):
         with limiter:
-            times.append(time())
+            times.append(monotonic())
 
     frequency = SECONDS / PERMITS
+
+    first_time = times[0]
+    expected_times = []
+    for i in range(BURST, len(times)):
+        expected_times.append(first_time + (i - BURST + 1) * frequency)
+
+    # Shouldn't wait for BURST calls
     for i in range(BURST - 1):
         assert times[i + 1] - times[i] < frequency - EPSILON
 
+    # After burst, the rest should fall at about the expected frequency
     times = times[BURST:]
-    for i in range(len(times) - 1):
-        assert 2 * (frequency - EPSILON) > times[i + 1] - times[i] > frequency - EPSILON
+    epsilon = 0.03
+    for i, time in enumerate(times):
+        assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
 
 
 def test_bucket_decorator_timing():
-    from time import time
+    from time import monotonic
 
     limiter = TokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
 
     @limiter.limit
     def call():
-        return time()
+        return monotonic()
 
     times = []
     for _ in range(VALUE_COUNT):
         times.append(call())
 
     frequency = SECONDS / PERMITS
+
+    first_time = times[0]
+    expected_times = []
+    for i in range(BURST, len(times)):
+        expected_times.append(first_time + (i - BURST + 1) * frequency)
+
+    # Shouldn't wait for BURST calls
     for i in range(BURST - 1):
         assert times[i + 1] - times[i] < frequency - EPSILON
 
+    # After burst, the rest should fall at about the expected frequency
     times = times[BURST:]
-    for i in range(len(times) - 1):
-        assert 2 * (frequency - EPSILON) > times[i + 1] - times[i] > frequency - EPSILON
+    epsilon = 0.03
+    for i, time in enumerate(times):
+        assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
