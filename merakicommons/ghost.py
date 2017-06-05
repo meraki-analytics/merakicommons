@@ -28,6 +28,10 @@ from typing import Callable, Union, Any
 from merakicommons.cache import lazy_property
 
 
+class GhostLoadingRequiredError(Exception):
+    pass
+
+
 class Ghost(object):
     @lazy_property
     def __load_groups(self) -> set:
@@ -68,7 +72,7 @@ class Ghost(object):
 
             try:
                 return self.fget(obj)
-            except AttributeError:
+            except GhostLoadingRequiredError:
                 load_group = self.fget._Ghost__load_group
                 obj.__load__(load_group)
 

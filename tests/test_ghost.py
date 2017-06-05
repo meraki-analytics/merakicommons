@@ -1,6 +1,6 @@
 import pytest
 
-from merakicommons.ghost import Ghost
+from merakicommons.ghost import Ghost, GhostLoadingRequiredError
 
 TEST_VALUE = "TEST VALUE"
 VALUE_COUNT = 100
@@ -18,7 +18,10 @@ class GhostObject(Ghost):
 
     @Ghost.property
     def value(self) -> str:
-        return self._value
+        try:
+            return self._value
+        except AttributeError:
+            raise GhostLoadingRequiredError
 
     @Ghost.property
     def constant_value(self) -> str:
@@ -59,7 +62,7 @@ def test_bad_value():
     for _ in range(VALUE_COUNT):
         with pytest.raises(AttributeError):
             x.bad_value
-        assert x.last_loaded == "bad_value"
+        assert x.last_loaded == None
 
 
 def test_ghost_load_normal_attribute():
@@ -104,5 +107,5 @@ def test_ghost_load_bad_value():
     for count in range(VALUE_COUNT):
         with pytest.raises(AttributeError):
             x.bad_value
-        assert x.load_calls == count + 1
-        assert x.last_loaded == "bad_value"
+        assert x.load_calls == 0
+        assert x.last_loaded == None
