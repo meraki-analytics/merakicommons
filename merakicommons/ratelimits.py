@@ -66,60 +66,50 @@ class FixedWindowRateLimiter(RateLimiter):
         self._window_seconds = window_seconds
         self._window_permits = window_permits
 
+        self._permitter = Lock()
+        self._permits = window_permits
+
         self._total_permits_issued = 0
         self._total_permits_issued_lock = Lock()
 
-        self._permitter = Lock()
-        self._permits = window_permits
-        self._permits_lock = Lock()
-
+        self._enter_exit_lock = Lock()
         self._currently_processing = 0
-        self._currently_processing_lock = Lock()
-
         self._resetter = None
-        self._resetter_lock = Lock()
 
     def __enter__(self) -> "FixedWindowRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         self._permitter.acquire()
-        with self._permits_lock:
+        with self._enter_exit_lock, self._total_permits_issued_lock:
             self._permits -= 1
+
+            self._total_permits_issued += 1
+            self._currently_processing += 1
+
             if self._permits > 0:
                 self._permitter.release()
-
-        # Increment total count
-        with self._total_permits_issued_lock:
-            self._total_permits_issued += 1
-
-        # Increment current count
-        with self._currently_processing_lock:
-            self._currently_processing += 1
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        # Decrement current count
-        with self._currently_processing_lock:
+        with self._enter_exit_lock:
             self._currently_processing -= 1
 
-        # The fixed window starts after processing the first permit ends. The presence of a resetter indicates whether we're in a fixed window already, or need to start one.
-        with self._resetter_lock:
+            # The fixed window starts after processing the first permit ends. The presence of a resetter indicates whether we're in a fixed window already or if we need to start one.
             if not self._resetter:
                 self._resetter = Timer(self._window_seconds, self._reset)
                 self._resetter.daemon = True
                 self._resetter.start()
 
     def _reset(self):
-        with self._permits_lock, self._currently_processing_lock:
+        with self._enter_exit_lock:
             self._permits = self._window_permits - self._currently_processing
+            self._resetter = None
+
             try:
                 self._permitter.release()
             except RuntimeError:
                 # Wasn't waiting on any acquire
                 pass
-
-            with self._resetter_lock:
-                self._resetter = None
 
     @property
     def permits_issued(self) -> int:
@@ -145,33 +135,31 @@ class TokenBucketRateLimiter(RateLimiter):
         self._permitter = Lock()
         self._token_limit = max_burst
         self._tokens = max_burst
-        self._tokens_lock = Lock()
-
-        self._token_update = token_update_frequency
-
-        self._token_provider = None
-        self._token_provider_lock = Lock()
 
         self._total_permits_issued = 0
         self._total_permits_issued_lock = Lock()
 
+        self._enter_exit_lock = Lock()
+
+        self._token_update = token_update_frequency
+        self._token_provider = None
+
     def __enter__(self) -> "TokenBucketRateLimiter":
-        # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
+        # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the token provider.
         self._permitter.acquire()
-        with self._tokens_lock:
+        with self._enter_exit_lock, self._total_permits_issued_lock:
             self._tokens -= 1
+
+            self._total_permits_issued += 1
+
             if self._tokens >= 1:
                 self._permitter.release()
-
-        # Increment total count
-        with self._total_permits_issued_lock:
-            self._total_permits_issued += 1
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # We don't want a thread sitting around dumping tokens into a filled bucket during downtimes. We construct one when needed and it cleans itself up if the bucket is full for an entire epoch.
-        with self._token_provider_lock:
+        with self._enter_exit_lock:
             if not self._token_provider:
                 self._token_provider = Thread(target=self._provide_tokens)
                 self._token_provider.daemon = True
@@ -186,11 +174,11 @@ class TokenBucketRateLimiter(RateLimiter):
 
         # If we go an entire epoch with a full bucket we'll stop this provider
         segments_per_epoch = int(ceil(self._epoch_seconds / self._token_update))
-        while segments_full < segments_per_epoch:
+        while True:
             sleep(max(next_time - monotonic(), 0))
             next_time = next_time + self._token_update
 
-            with self._tokens_lock:
+            with self._enter_exit_lock:
                 if self._tokens == self._token_limit:
                     segments_full += 1
                 elif self._tokens < 1:
@@ -206,9 +194,10 @@ class TokenBucketRateLimiter(RateLimiter):
                     self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
                     segments_full = 0
 
-        # Clean up
-        with self._token_provider_lock:
-            self._token_provider = None
+                if segments_full >= segments_per_epoch:
+                    # End this thread
+                    self._token_provider = None
+                    break
 
     @property
     def permits_issued(self) -> int:
