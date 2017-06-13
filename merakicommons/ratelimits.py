@@ -30,6 +30,37 @@ class RateLimiter(ABC):
         return limited
 
 
+class MultiRateLimiter(RateLimiter):
+    def __init__(self, *limiters: RateLimiter) -> None:
+        self._limiters = limiters
+
+        self._total_permits_issued = 0
+        self._total_permits_issued_lock = Lock()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        for limiter in self._limiters:
+            limiter.__exit__(exc_type, exc_val, exc_tb)
+
+    def __enter__(self) -> "RateLimiter":
+        for limiter in self._limiters:
+            limiter.__enter__()
+
+        # Increment total count
+        with self._total_permits_issued_lock:
+            self._total_permits_issued += 1
+
+        return self
+
+    @property
+    def permits_issued(self) -> int:
+        with self._total_permits_issued_lock:
+            return self._total_permits_issued
+
+    def reset_permits_issued(self) -> None:
+        with self._total_permits_issued_lock:
+            self._total_permits_issued = 0
+
+
 class FixedWindowRateLimiter(RateLimiter):
     def __init__(self, window_seconds: int, window_permits: int) -> None:
         self._window_seconds = window_seconds
@@ -79,14 +110,13 @@ class FixedWindowRateLimiter(RateLimiter):
                 self._resetter.start()
 
     def _reset(self):
-        with self._permits_lock:
-            with self._currently_processing_lock:
-                self._permits = self._window_permits - self._currently_processing
-                try:
-                    self._permitter.release()
-                except RuntimeError:
-                    # Wasn't waiting on any acquire
-                    pass
+        with self._permits_lock, self._currently_processing_lock:
+            self._permits = self._window_permits - self._currently_processing
+            try:
+                self._permitter.release()
+            except RuntimeError:
+                # Wasn't waiting on any acquire
+                pass
 
             with self._resetter_lock:
                 self._resetter = None
