@@ -1,4 +1,4 @@
-from merakicommons.ratelimits import FixedWindowRateLimiter, TokenBucketRateLimiter
+from merakicommons.ratelimits import FixedWindowRateLimiter, TokenBucketRateLimiter, WindowedTokenBucketRateLimiter
 
 SECONDS = 1
 PERMITS = 6
@@ -222,6 +222,95 @@ def test_bucket_decorator_timing():
 
     # After burst, the rest should fall at about the expected frequency
     times = times[BURST:]
+    epsilon = 0.03
+    for i, time in enumerate(times):
+        assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
+
+
+##################################
+# WindowedTokenBucketRateLimiter #
+##################################
+
+def test_windowed_bucket_acquire_simple():
+    limiter = WindowedTokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+    x = False
+    with limiter:
+        x = True
+    assert x
+
+
+def test_windowed_bucket_decorator_simple():
+    limiter = WindowedTokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+
+    @limiter.limit
+    def call():
+        return True
+
+    assert call()
+
+
+def test_windowed_bucket_permit_count():
+    limiter = WindowedTokenBucketRateLimiter(SECONDS, MANY_PERMITS, MANY_PERMITS, SECONDS / 10)
+    assert limiter.permits_issued == 0
+
+    @limiter.limit
+    def call():
+        pass
+
+    for i in range(LARGE_VALUE_COUNT // 2):
+        with limiter:
+            pass
+        assert limiter.permits_issued == i + 1
+
+    limiter.reset_permits_issued()
+    assert limiter.permits_issued == 0
+
+    for i in range(LARGE_VALUE_COUNT // 2):
+        call()
+        assert limiter.permits_issued == i + 1
+
+
+def test_windowed_bucket_acquire_timing():
+    from time import monotonic
+
+    limiter = WindowedTokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+    times = []
+    for _ in range(VALUE_COUNT):
+        with limiter:
+            times.append(monotonic())
+
+    frequency = SECONDS / PERMITS
+
+    first_time = times[0]
+    expected_times = [first_time]
+    for i in range(1, len(times)):
+        expected_times.append(first_time + i * frequency)
+
+    epsilon = 0.03
+    for i, time in enumerate(times):
+        assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
+
+
+def test_windowed_bucket_decorator_timing():
+    from time import monotonic
+
+    limiter = WindowedTokenBucketRateLimiter(SECONDS, PERMITS, BURST, TOKENS)
+
+    @limiter.limit
+    def call():
+        return monotonic()
+
+    times = []
+    for _ in range(VALUE_COUNT):
+        times.append(call())
+
+    frequency = SECONDS / PERMITS
+
+    first_time = times[0]
+    expected_times = [first_time]
+    for i in range(1, len(times)):
+        expected_times.append(first_time + i * frequency)
+
     epsilon = 0.03
     for i, time in enumerate(times):
         assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon

@@ -140,7 +140,6 @@ class TokenBucketRateLimiter(RateLimiter):
         self._total_permits_issued_lock = Lock()
 
         self._enter_exit_lock = Lock()
-
         self._token_update = token_update_frequency
         self._token_provider = None
 
@@ -198,6 +197,97 @@ class TokenBucketRateLimiter(RateLimiter):
                     # End this thread
                     self._token_provider = None
                     break
+
+    @property
+    def permits_issued(self) -> int:
+        with self._total_permits_issued_lock:
+            return self._total_permits_issued
+
+    def reset_permits_issued(self) -> None:
+        with self._total_permits_issued_lock:
+            self._total_permits_issued = 0
+
+
+class WindowedTokenBucketRateLimiter(RateLimiter):
+    def __init__(self, epoch_seconds: int, epoch_permits: int, max_burst: int, token_update_frequency: float) -> None:
+        if max_burst < 1 or max_burst > epoch_permits:
+            raise ValueError("Max burst must be >= 1 and <= epoch permits!")
+
+        if token_update_frequency <= 0 or token_update_frequency > epoch_seconds:
+            raise ValueError("Token update frequency must be > 0 and <= epoch seconds!")
+
+        self._epoch_seconds = epoch_seconds
+        self._epoch_permits = epoch_permits
+
+        self._permitter = Lock()
+        self._token_limit = max_burst
+        self._tokens = 1
+
+        self._total_permits_issued = 0
+        self._total_permits_issued_lock = Lock()
+
+        self._enter_exit_lock = Lock()
+        self._currently_processing = 0
+        self._token_update = token_update_frequency
+        self._token_provider = None
+
+    def __enter__(self) -> "WindowedTokenBucketRateLimiter":
+        # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the token provider.
+        self._permitter.acquire()
+        with self._enter_exit_lock, self._total_permits_issued_lock:
+            self._tokens -= 1
+
+            self._total_permits_issued += 1
+            self._currently_processing += 1
+
+            if self._tokens >= 1:
+                self._permitter.release()
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        with self._enter_exit_lock:
+            self._currently_processing -= 1
+
+            if not self._token_provider:
+                self._token_provider = Thread(target=self._provide_tokens)
+                self._token_provider.daemon = True
+                self._token_provider.start()
+
+    def _provide_tokens(self):
+        with self._enter_exit_lock:
+            tokens_left = self._epoch_permits - (self._currently_processing + 1)
+        segments = int((self._epoch_seconds - self._token_update) // self._token_update)
+        tokens_per_segment = tokens_left / segments
+
+        start_time = monotonic()
+        next_time = start_time + self._token_update
+
+        for _ in range(segments):
+            sleep(max(next_time - monotonic(), 0))
+            next_time = next_time + self._token_update
+
+            with self._enter_exit_lock:
+                if self._tokens < 1:
+                    self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
+                    if self._tokens >= 1:
+                        try:
+                            self._permitter.release()
+                        except RuntimeError:
+                            # Wasn't waiting on any acquire
+                            pass
+                else:
+                    self._tokens = min(self._tokens + tokens_per_segment, self._token_limit)
+
+        # Wait out the last segment and clean up
+        sleep(max(next_time - monotonic(), 0))
+        with self._enter_exit_lock:
+            if self._tokens < 1:
+                self._tokens = 1
+                self._permitter.release()
+            else:
+                self._tokens = 1
+            self._token_provider = None
 
     @property
     def permits_issued(self) -> int:
