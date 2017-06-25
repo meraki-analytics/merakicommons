@@ -62,9 +62,11 @@ class MultiRateLimiter(RateLimiter):
 
 
 class FixedWindowRateLimiter(RateLimiter):
-    def __init__(self, window_seconds: int, window_permits: int) -> None:
+    def __init__(self, window_seconds: int, window_permits: int, timeout: float = -1) -> None:
         self._window_seconds = window_seconds
         self._window_permits = window_permits
+
+        self._timeout = timeout
 
         self._permitter = Lock()
         self._permits = window_permits
@@ -78,7 +80,8 @@ class FixedWindowRateLimiter(RateLimiter):
 
     def __enter__(self) -> "FixedWindowRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
-        self._permitter.acquire()
+        if not self._permitter.acquire(timeout=self._timeout):
+            raise TimeoutError("Rate Limiter timed out!")
         with self._enter_exit_lock, self._total_permits_issued_lock:
             self._permits -= 1
 
@@ -122,7 +125,7 @@ class FixedWindowRateLimiter(RateLimiter):
 
 
 class TokenBucketRateLimiter(RateLimiter):
-    def __init__(self, epoch_seconds: int, epoch_permits: int, max_burst: int, token_update_frequency: float) -> None:
+    def __init__(self, epoch_seconds: int, epoch_permits: int, max_burst: int, token_update_frequency: float, timeout: float = -1) -> None:
         if max_burst < 1 or max_burst > epoch_permits:
             raise ValueError("Max burst must be >= 1 and <= epoch permits!")
 
@@ -131,6 +134,8 @@ class TokenBucketRateLimiter(RateLimiter):
 
         self._epoch_seconds = epoch_seconds
         self._epoch_permits = epoch_permits
+
+        self._timeout = timeout
 
         self._permitter = Lock()
         self._token_limit = max_burst
@@ -145,7 +150,8 @@ class TokenBucketRateLimiter(RateLimiter):
 
     def __enter__(self) -> "TokenBucketRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the token provider.
-        self._permitter.acquire()
+        if not self._permitter.acquire(timeout=self._timeout):
+            raise TimeoutError("Rate Limiter timed out!")
         with self._enter_exit_lock, self._total_permits_issued_lock:
             self._tokens -= 1
 
@@ -209,7 +215,7 @@ class TokenBucketRateLimiter(RateLimiter):
 
 
 class WindowedTokenBucketRateLimiter(RateLimiter):
-    def __init__(self, epoch_seconds: int, epoch_permits: int, max_burst: int, token_update_frequency: float) -> None:
+    def __init__(self, epoch_seconds: int, epoch_permits: int, max_burst: int, token_update_frequency: float, timeout: float = -1) -> None:
         if max_burst < 1 or max_burst > epoch_permits:
             raise ValueError("Max burst must be >= 1 and <= epoch permits!")
 
@@ -218,6 +224,8 @@ class WindowedTokenBucketRateLimiter(RateLimiter):
 
         self._epoch_seconds = epoch_seconds
         self._epoch_permits = epoch_permits
+
+        self._timeout = timeout
 
         self._permitter = Lock()
         self._token_limit = max_burst
@@ -233,7 +241,8 @@ class WindowedTokenBucketRateLimiter(RateLimiter):
 
     def __enter__(self) -> "WindowedTokenBucketRateLimiter":
         # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the token provider.
-        self._permitter.acquire()
+        if not self._permitter.acquire(timeout=self._timeout):
+            raise TimeoutError("Rate Limiter timed out!")
         with self._enter_exit_lock, self._total_permits_issued_lock:
             self._tokens -= 1
 
