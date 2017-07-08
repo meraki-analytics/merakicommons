@@ -88,16 +88,18 @@ class Ghost(object):
             except GhostLoadingRequiredError:
                 load_group = self.fget._Ghost__load_group
                 obj.__load__(load_group)
-
-                try:
-                    obj._Ghost__loaded_groups.add(load_group)
-                except AttributeError:
-                    obj._Ghost__loaded_groups = {load_group}
-
-                if obj._Ghost__load_groups.issubset(obj._Ghost__loaded_groups):
-                    obj._Ghost__all_loaded_status = True
+                obj._Ghost__set_loaded(load_group)
 
                 return self.fget(obj)
+
+    def __set_loaded(self, load_group) -> None:
+        try:
+            self._Ghost__loaded_groups.add(load_group)
+        except AttributeError:
+            self._Ghost__loaded_groups = {load_group}
+
+        if self._Ghost__load_groups.issubset(self._Ghost__loaded_groups):
+            self._Ghost__all_loaded_status = True
 
     @staticmethod
     def property(load_group_or_method: Union[Callable[[Any], Any], Any]) -> Union[property, Callable[[Callable[[Any], Any]], property]]:
