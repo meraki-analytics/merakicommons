@@ -87,6 +87,9 @@ def searchable(search_key_types: Mapping[Type, Union[str, Collection[str]]]) -> 
 
 
 class SearchableList(list):
+    def filter(self, function):
+        return filter(function, self)
+
     def __getitem__(self, item: Any) -> Any:
         try:
             return super().__getitem__(item)
@@ -132,31 +135,36 @@ class SearchableList(list):
 
     def enumerate(self, item: Any, reverse: bool = False) -> Generator[Tuple[int, Any], None, None]:
         items = self
-        max = len(items) - 1
         if reverse:
+            max = len(items) - 1
             items = reversed(items)
         for index, x in enumerate(items):
             if x == item:
-                yield max - index if reverse else index, x
+                yield index, x if not reverse else max - index
                 continue
 
             try:
                 if item in x:
-                    yield max - index if reverse else index, x
+                    yield index, x if not reverse else max - index
             except TypeError:
                 # x doesn't define __contains__
                 pass
 
-    def delete(self, item: Any) -> None:
+    def delete(self, item: Any, count: int = float("inf")) -> None:
         deleted = 0
         for index, _ in self.enumerate(item, reverse=True):
             del self[index]
             deleted += 1
+            if deleted >= count:
+                break
         if deleted == 0:
             raise SearchError(str(item))
 
 
 class SearchableSet(set):
+    def filter(self, function):
+        return filter(function, self)
+
     def __getitem__(self, item: Any) -> Any:
         return self.find(item)
 
@@ -216,6 +224,9 @@ class SearchableSet(set):
 
 
 class SearchableDictionary(dict):
+    def filter(self, function):
+        return filter(function, self.items())
+
     def __getitem__(self, item: Any) -> Any:
         try:
             return super().__getitem__(item)
@@ -397,52 +408,6 @@ class SearchableLazyList(SearchableList):
     def __reversed__(self):
         self._generate_many()
         return super().__reversed__()
-
-    def _search_generator(self, item: Any, reverse: bool = False) -> Generator[Any, None, None]:
-        """A helper method for `self.search` that returns a generator rather than a list."""
-        results = 0
-        for _, x in self.enumerate(item, reverse=reverse):
-            yield x
-            results += 1
-        if results == 0:
-            raise SearchError(str(item))
-
-    def search(self, item: Any, streaming: bool = False, reverse: bool = False) -> Union["SearchableList", Generator[Any, None, None]]:
-        if streaming:
-            return self._search_generator(item, reverse=reverse)
-        else:
-            result = SearchableList(x for _, x in self.enumerate(item, reverse=reverse))
-            if len(result) == 0:
-                raise SearchError(str(item))
-            return result
-
-    def find(self, item: Any, reverse: bool = False) -> Any:
-        for _, x in self.enumerate(item, reverse=reverse):
-            return x
-        raise SearchError(str(item))
-
-    def contains(self, item: Any) -> bool:
-        for _, _ in self.enumerate(item):
-            return True
-        return False
-
-    def enumerate(self, item: Any, reverse: bool = False) -> Generator[Tuple[int, Any], None, None]:
-        items = self
-        if reverse:
-            max = len(items) - 1
-        if reverse:
-            items = reversed(items)
-        for index, x in enumerate(items):
-            if x == item:
-                yield index, x if not reverse else max - index
-                continue
-
-            try:
-                if item in x:
-                    yield index, x if not reverse else max - index
-            except TypeError:
-                # x doesn't define __contains__
-                pass
 
     def delete(self, item: Any, count: int = float("inf")) -> None:
         deleted = 0
