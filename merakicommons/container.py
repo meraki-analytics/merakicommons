@@ -1,4 +1,4 @@
-from typing import Type, TypeVar, Mapping, Callable, Union, Collection, Any, Generator, Tuple
+from typing import Type, TypeVar, Mapping, Callable, Union, Collection, Any, Generator, Tuple, Optional
 
 T = TypeVar("T")
 
@@ -90,7 +90,7 @@ class SearchableList(list):
     def __getitem__(self, item: Any) -> Any:
         try:
             return super().__getitem__(item)
-        except TypeError:
+        except (IndexError, TypeError):
             return self.find(item)
 
     def __contains__(self, item: Any) -> bool:
@@ -99,10 +99,11 @@ class SearchableList(list):
     def __delitem__(self, item: Any) -> None:
         try:
             super().__delitem__(item)
-        except TypeError:
+        except (IndexError, TypeError):
             self.delete(item)
 
     def _search_generator(self, item: Any, reverse: bool = False) -> Generator[Any, None, None]:
+        """A helper method for `self.search` that returns a generator rather than a list."""
         results = 0
         for _, x in self.enumerate(item, reverse=reverse):
             yield x
@@ -166,6 +167,7 @@ class SearchableSet(set):
         self.delete(item)
 
     def _search_generator(self, item: Any) -> Generator[Any, None, None]:
+        """A helper method for `self.search` that returns a generator rather than a list."""
         results = 0
         for x in self.enumerate(item):
             yield x
@@ -230,6 +232,7 @@ class SearchableDictionary(dict):
             self.delete(item)
 
     def _search_generator(self, item: Any) -> Generator[Tuple[Any, Any], None, None]:
+        """A helper method for `self.search` that returns a generator rather than a list."""
         results = 0
         for key, value in self.enumerate(item):
             yield key, value
@@ -306,3 +309,147 @@ class SearchableDictionary(dict):
             raise SearchError(str(item))
         for key in to_delete:
             del self[key]
+
+
+class SearchableLazyList(SearchableList):
+    """A SearchableList where the values of the list are generated on-demand.
+
+    Arguments:
+        constructor (callable): A function that returns a generator of the values to be put in the list.
+    """
+    def __init__(self, generator: Generator):
+        self._generator = generator
+        self._empty = False
+        super().__init__()  # initialize an empty list
+
+    def __str__(self):
+        if self._empty:
+            return super().__str__()
+        else:
+            string = super().__str__()
+            if string == "[]":
+                return "[...]"
+            else:
+                return string[:-1] + ", ...]"
+
+    def __iter__(self):
+        for item in super().__iter__():
+            yield item
+        while not self._empty:
+            yield next(self)
+
+    def __len__(self):
+        if self._empty:
+            return super().__len__()
+        else:
+            raise RuntimeError("SearchableLazyList hasn't been fully generated yet and therefore has an unknown length.")
+
+    def __next__(self):
+        try:
+            value = next(self._generator)
+            self.append(value)
+        except StopIteration as error:
+            self._empty = True
+            raise error
+        return value
+
+    def _generate_many(self, count: Optional[int] = None):
+        if count is not None:
+            for _ in range(count):
+                next(self)
+        else:
+            for _ in self:
+                pass
+            assert self._empty
+
+    def __getitem__(self, item: Any) -> Any:
+        try:
+            return list.__getitem__(self, item)
+        except IndexError:
+            # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
+            iterate_until = item - super().__len__() + 1
+            try:
+                self._generate_many(iterate_until)
+            except StopIteration:
+                pass
+            # Now that we have 1) enough or 2) all the values, try returning again.
+            # If we still get an index error, then we have an int that is being searched on.
+            try:
+                return list.__getitem__(self, item)
+            except IndexError:
+                return self.find(item)
+        except TypeError:
+            return self.find(item)
+
+    def __delitem__(self, item: Any) -> None:
+        if isinstance(item, int):
+            # Make sure we have enough values generated
+            try:
+                iterate_until = item - super().__len__() + 1
+                self._generate_many(iterate_until)
+            except StopIteration:
+                pass
+        try:
+            list.__delitem__(self, item)
+        except (IndexError, TypeError) as error:
+            self.delete(item, count=1)
+
+    def __reversed__(self):
+        self._generate_many()
+        return super().__reversed__()
+
+    def _search_generator(self, item: Any, reverse: bool = False) -> Generator[Any, None, None]:
+        """A helper method for `self.search` that returns a generator rather than a list."""
+        results = 0
+        for _, x in self.enumerate(item, reverse=reverse):
+            yield x
+            results += 1
+        if results == 0:
+            raise SearchError(str(item))
+
+    def search(self, item: Any, streaming: bool = False, reverse: bool = False) -> Union["SearchableList", Generator[Any, None, None]]:
+        if streaming:
+            return self._search_generator(item, reverse=reverse)
+        else:
+            result = SearchableList(x for _, x in self.enumerate(item, reverse=reverse))
+            if len(result) == 0:
+                raise SearchError(str(item))
+            return result
+
+    def find(self, item: Any, reverse: bool = False) -> Any:
+        for _, x in self.enumerate(item, reverse=reverse):
+            return x
+        raise SearchError(str(item))
+
+    def contains(self, item: Any) -> bool:
+        for _, _ in self.enumerate(item):
+            return True
+        return False
+
+    def enumerate(self, item: Any, reverse: bool = False) -> Generator[Tuple[int, Any], None, None]:
+        items = self
+        if reverse:
+            max = len(items) - 1
+        if reverse:
+            items = reversed(items)
+        for index, x in enumerate(items):
+            if x == item:
+                yield index, x if not reverse else max - index
+                continue
+
+            try:
+                if item in x:
+                    yield index, x if not reverse else max - index
+            except TypeError:
+                # x doesn't define __contains__
+                pass
+
+    def delete(self, item: Any, count: int = float("inf")) -> None:
+        deleted = 0
+        for index, _ in self.enumerate(item, reverse=False):
+            del self[index]
+            deleted += 1
+            if deleted >= count:
+                break
+        if deleted == 0:
+            raise SearchError(str(item))
