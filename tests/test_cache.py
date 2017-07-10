@@ -1,4 +1,6 @@
-from merakicommons.cache import lazy_property
+import pytest
+
+from merakicommons.cache import lazy_property, Cache
 
 TEST_VALUE_1 = "TEST VALUE_1"
 TEST_VALUE_2 = "TEST_VALUE_2"
@@ -43,3 +45,49 @@ def test_lazy_property_loading():
         y.property
         assert x.property_calls == 1
         assert y.property_calls == 1
+
+
+#########
+# Cache #
+#########
+
+def test_cache_simple():
+    x = Cache()
+    assert "test" not in x
+    assert 1 not in x
+
+    x.put("test", 1)
+    assert "test" in x
+    assert 1 not in x
+
+    x[1] = "test"
+    assert "test" in x
+    assert 1 in x
+
+    assert x.get(1) == "test"
+    assert x["test"] == 1
+
+    with pytest.raises(KeyError):
+        x[2]
+
+
+def test_cache_delete():
+    x = Cache()
+
+    x["test"] = 1
+    assert "test" in x
+    assert x["test"] == 1
+
+    x[1] = "test"
+    assert 1 in x
+    assert x[1] == "test"
+
+    del x["test"]
+    assert "test" not in x
+    with pytest.raises(KeyError):
+        x["test"]
+
+    x.delete(1)
+    assert 1 not in x
+    with pytest.raises(KeyError):
+        x[1]
