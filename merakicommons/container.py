@@ -93,7 +93,7 @@ class SearchableList(list):
     def __getitem__(self, item: Any) -> Any:
         try:
             return super().__getitem__(item)
-        except (IndexError, TypeError):
+        except TypeError:
             return self.find(item)
 
     def __contains__(self, item: Any) -> bool:
@@ -102,7 +102,7 @@ class SearchableList(list):
     def __delitem__(self, item: Any) -> None:
         try:
             super().__delitem__(item)
-        except (IndexError, TypeError):
+        except TypeError:
             self.delete(item)
 
     def _search_generator(self, item: Any, reverse: bool = False) -> Generator[Any, None, None]:
@@ -140,23 +140,21 @@ class SearchableList(list):
             items = reversed(items)
         for index, x in enumerate(items):
             if x == item:
-                yield index, x if not reverse else max - index
+                yield max - index if reverse else index, x
                 continue
 
             try:
                 if item in x:
-                    yield index, x if not reverse else max - index
+                    yield max - index if reverse else index, x
             except TypeError:
                 # x doesn't define __contains__
                 pass
 
-    def delete(self, item: Any, count: int = float("inf")) -> None:
+    def delete(self, item: Any) -> None:
         deleted = 0
         for index, _ in self.enumerate(item, reverse=True):
             del self[index]
             deleted += 1
-            if deleted >= count:
-                break
         if deleted == 0:
             raise SearchError(str(item))
 
@@ -403,18 +401,16 @@ class SearchableLazyList(SearchableList):
         try:
             list.__delitem__(self, item)
         except (IndexError, TypeError) as error:
-            self.delete(item, count=1)
+            self.delete(item)
 
     def __reversed__(self):
         self._generate_many()
         return super().__reversed__()
 
-    def delete(self, item: Any, count: int = float("inf")) -> None:
+    def delete(self, item: Any) -> None:
         deleted = 0
         for index, _ in self.enumerate(item, reverse=False):
             del self[index]
             deleted += 1
-            if deleted >= count:
-                break
         if deleted == 0:
             raise SearchError(str(item))
