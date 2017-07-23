@@ -6,7 +6,7 @@ from threading import Lock
 T = TypeVar("T")
 
 
-def lazy(method: Callable[[Any], T]) -> property:
+def lazy(method: Callable[[Any], T]) -> Callable[[Any], T]:
     values = WeakKeyDictionary()
 
     @wraps(method)
@@ -23,7 +23,11 @@ def lazy(method: Callable[[Any], T]) -> property:
         except KeyError:
             pass
 
+    def _lazy_set(self, value) -> None:
+        values[self] = value
+
     wrapper._lazy_reset = _lazy_reset
+    wrapper._lazy_set = _lazy_set
 
     return wrapper
 
