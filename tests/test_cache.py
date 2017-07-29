@@ -60,7 +60,7 @@ def test_cache_simple():
     assert x.contains(int, "test")
     assert not x.contains(int, 1)
 
-    #x[1] = "test"
+    # x[1] = "test"
     x.put(str, 1, "test")
     assert x.contains(int, "test")
     assert x.contains(str, 1)
