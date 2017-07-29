@@ -53,41 +53,42 @@ def test_lazy_property_loading():
 
 def test_cache_simple():
     x = Cache()
-    assert "test" not in x
-    assert 1 not in x
+    assert not x.contains(int, "test")
+    assert not x.contains(int, 1)
 
-    x.put("test", 1)
-    assert "test" in x
-    assert 1 not in x
+    x.put(int, "test", 1)
+    assert x.contains(int, "test")
+    assert not x.contains(int, 1)
 
-    x[1] = "test"
-    assert "test" in x
-    assert 1 in x
+    #x[1] = "test"
+    x.put(str, 1, "test")
+    assert x.contains(int, "test")
+    assert x.contains(str, 1)
 
-    assert x.get(1) == "test"
-    assert x["test"] == 1
+    assert x.get(str, 1) == "test"
+    assert x.get(int, "test") == 1
 
     with pytest.raises(KeyError):
-        x[2]
+        x.get(int, 2)
 
 
 def test_cache_delete():
     x = Cache()
 
-    x["test"] = 1
-    assert "test" in x
-    assert x["test"] == 1
+    x.put(int, "test", 1)
+    assert x.contains(int, "test")
+    assert x.get(int, "test") == 1
 
-    x[1] = "test"
-    assert 1 in x
-    assert x[1] == "test"
+    x.put(str, 1, "test")
+    assert x.contains(str, 1)
+    assert x.get(str, 1) == "test"
 
-    del x["test"]
-    assert "test" not in x
+    x.delete(int, "test")
+    assert not x.contains(int, "test")
     with pytest.raises(KeyError):
-        x["test"]
+        x.get(int, "test")
 
-    x.delete(1)
-    assert 1 not in x
+    x.delete(str, 1)
+    assert not x.contains(str, 1)
     with pytest.raises(KeyError):
-        x[1]
+        x.get(str, 1)

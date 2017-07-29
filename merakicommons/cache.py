@@ -54,13 +54,9 @@ class _CacheSegment(object):
         with self._lock:
             del self._data[type][key]
 
-    def __len__(self) -> int:
+    def contains(self, type: Any, key: Any) -> bool:
         with self._lock:
-            return self._data.__len__()
-
-    def __contains__(self, item: Any) -> bool:
-        with self._lock:
-            return self._data.__contains__(item)
+            return self._data[type].__contains__(key)
 
 
 # TODO: In development. Interface here for beginning integration.
