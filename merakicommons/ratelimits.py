@@ -5,6 +5,34 @@ from abc import ABC, abstractmethod
 from threading import Lock, Timer, Thread
 
 
+class Semaphore(object):
+    """ This exists becuase the builtin Semaphore can't release multiple permits at once """
+    def __init__(self, permits: int) -> None:
+        self._lock = Lock()
+        self._permits_lock = Lock()
+        self._permits = permits
+
+    def acquire(self, blocking: bool = True, timeout: int = -1) -> bool:
+        if not self._lock.acquire(blocking=blocking, timeout=timeout):
+            return False
+        with self._permits_lock:
+            self._permits -= 1
+
+            if self._permits >= 1:
+                self._lock.release()
+        return True
+
+    def release(self, permits: int = 1) -> None:
+        with self._permits_lock:
+            current = self._permits
+            self._permits += permits
+            if current <= 0 and self._permits >= 1:
+                try:
+                    self._lock.release()
+                except RuntimeError:
+                    pass
+
+
 class RateLimiter(ABC):
     @property
     @abstractmethod
