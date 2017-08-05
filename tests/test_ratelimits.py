@@ -191,7 +191,7 @@ def test_bucket_acquire_timing():
 
     # After burst, the rest should fall at about the expected frequency
     times = times[BURST:]
-    epsilon = 0.03
+    epsilon = 0.04
     for i, time in enumerate(times):
         assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
 
@@ -222,7 +222,7 @@ def test_bucket_decorator_timing():
 
     # After burst, the rest should fall at about the expected frequency
     times = times[BURST:]
-    epsilon = 0.03
+    epsilon = 0.04
     for i, time in enumerate(times):
         assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
 
@@ -286,7 +286,7 @@ def test_windowed_bucket_acquire_timing():
     for i in range(1, len(times)):
         expected_times.append(first_time + i * frequency)
 
-    epsilon = 0.03
+    epsilon = 0.04
     for i, time in enumerate(times):
         assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon
 
@@ -311,6 +311,6 @@ def test_windowed_bucket_decorator_timing():
     for i in range(1, len(times)):
         expected_times.append(first_time + i * frequency)
 
-    epsilon = 0.03
+    epsilon = 0.04
     for i, time in enumerate(times):
         assert expected_times[i] - epsilon <= time <= expected_times[i] + epsilon

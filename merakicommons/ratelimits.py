@@ -32,6 +32,16 @@ class Semaphore(object):
                 except RuntimeError:
                     pass
 
+    def drain(self, permits: int = -1) -> None:
+        with self._permits_lock:
+            acquired = self._lock.acquire(blocking=False)
+            if permits < 0:
+                self._permits = 0
+            else:
+                self._permits = max(0, self._permits - permits)
+            if self._permits >= 1 and acquired:
+                self._lock.release()
+
 
 class RateLimiter(ABC):
     @property
@@ -96,51 +106,67 @@ class FixedWindowRateLimiter(RateLimiter):
 
         self._timeout = timeout
 
-        self._permitter = Lock()
-        self._permits = window_permits
+        self._permitter = Semaphore(self._window_permits)
 
-        self._total_permits_issued = 0
         self._total_permits_issued_lock = Lock()
+        self._total_permits_issued = 0
 
-        self._enter_exit_lock = Lock()
-        self._currently_processing = 0
+        self._resetter_lock = Lock()
         self._resetter = None
 
+        self._currently_processing_lock = Lock()
+        self._currently_processing = 0
+
     def __enter__(self) -> "FixedWindowRateLimiter":
-        # Grab the permit lock and decrement remaining permits. If this leaves it at 0, don't release the permit lock. It will be released by the resetter.
         if not self._permitter.acquire(timeout=self._timeout):
             raise TimeoutError("Rate Limiter timed out!")
-        with self._enter_exit_lock, self._total_permits_issued_lock:
-            self._permits -= 1
-
+        with self._total_permits_issued_lock:
             self._total_permits_issued += 1
+        with self._currently_processing_lock:
             self._currently_processing += 1
-
-            if self._permits > 0:
-                self._permitter.release()
-
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        with self._enter_exit_lock:
+        with self._currently_processing_lock:
             self._currently_processing -= 1
 
-            # The fixed window starts after processing the first permit ends. The presence of a resetter indicates whether we're in a fixed window already or if we need to start one.
-            if not self._resetter:
-                self._resetter = Timer(self._window_seconds, self._reset)
-                self._resetter.daemon = True
-                self._resetter.start()
+        if not self._resetter:
+            with self._resetter_lock:
+                if not self._resetter:
+                    self._resetter = Timer(self._window_seconds, self._reset)
+                    self._resetter.cancelled = False
+                    self._resetter.daemon = True
+                    self._resetter.start()
 
-    def _reset(self):
-        with self._enter_exit_lock:
-            self._permits = self._window_permits - self._currently_processing
-            self._resetter = None
+    def _reset(self) -> None:
+        with self._resetter_lock:
+            if not self._resetter.cancelled:
+                self._permitter.drain()
+                with self._currently_processing_lock:
+                    self._permitter.release(self._window_permits - self._currently_processing)
+                self._resetter = None
 
-            try:
-                self._permitter.release()
-            except RuntimeError:
-                # Wasn't waiting on any acquire
-                pass
+    def set_permits(self, permits: int) -> None:
+        with self._resetter_lock:
+            difference = permits - self._window_permits
+            if difference > 0:
+                self._permitter.release(difference)
+            elif difference < 0:
+                self._permitter.drain(-difference)
+            self._window_permits = permits
+
+    def restrict_for(self, seconds: int) -> None:
+        with self._resetter_lock:
+            self._permitter.drain()
+
+            if self._resetter:
+                self._resetter.cancel()
+                self._resetter.cancelled = True
+
+            self._resetter = Timer(seconds, self._reset)
+            self._resetter.cancelled = False
+            self._resetter.daemon = True
+            self._resetter.start()
 
     @property
     def permits_issued(self) -> int:
