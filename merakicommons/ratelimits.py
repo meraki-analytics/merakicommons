@@ -75,6 +75,12 @@ class MultiRateLimiter(RateLimiter):
         self._total_permits_issued = 0
         self._total_permits_issued_lock = Lock()
 
+    def __getitem__(self, item):
+        return self._limiters[item]
+
+    def __len__(self):
+        return len(self._limiters)
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         for limiter in self._limiters:
             limiter.__exit__(exc_type, exc_val, exc_tb)
@@ -100,7 +106,7 @@ class MultiRateLimiter(RateLimiter):
 
 
 class FixedWindowRateLimiter(RateLimiter):
-    def __init__(self, window_seconds: int, window_permits: int, timeout: float = -1) -> None:
+    def __init__(self, window_seconds: int, window_permits: int, timeout: int = -1) -> None:
         self._window_seconds = window_seconds
         self._window_permits = window_permits
 
