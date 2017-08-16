@@ -1,4 +1,4 @@
-from typing import Type, TypeVar, Mapping, Callable, Union, Collection, Any, Generator, Tuple, Optional
+from typing import Type, TypeVar, Mapping, Callable, Union, Iterable, Any, Generator, Tuple, Optional
 
 T = TypeVar("T")
 
@@ -7,7 +7,7 @@ class SearchError(TypeError):
     pass
 
 
-def searchable(search_key_types: Mapping[Type, Union[str, Collection[str]]]) -> Callable[[T], T]:
+def searchable(search_key_types: Mapping[Type, Union[str, Iterable[str]]]) -> Callable[[T], T]:
     search_key_types = dict(search_key_types)
 
     # For each key type, we want to store the ordered attributes to query.

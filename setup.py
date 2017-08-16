@@ -9,7 +9,7 @@ with open(path.join(here, "README.rst"), encoding="UTF-8") as readme:
 
 setup(
     name="merakicommons",
-    version="1.0.0",
+    version="1.0.2",
     author="Meraki Analytics Team",
     author_email="team@merakianalytics.com",
     url="https://github.com/meraki-analytics/merakicommons",
