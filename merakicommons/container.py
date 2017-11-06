@@ -351,7 +351,8 @@ class SearchableLazyList(SearchableList):
         if self._empty:
             return super().__len__()
         else:
-            raise RuntimeError("SearchableLazyList hasn't been fully generated yet and therefore has an unknown length.")
+            self._generate()
+            return super().__len__()
 
     def __next__(self):
         try:
@@ -362,7 +363,7 @@ class SearchableLazyList(SearchableList):
             raise error
         return value
 
-    def _generate_many(self, count: Optional[int] = None):
+    def _generate(self, count: Optional[int] = None):
         if count is not None:
             for _ in range(count):
                 next(self)
@@ -378,7 +379,7 @@ class SearchableLazyList(SearchableList):
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
             iterate_until = item - super().__len__() + 1
             try:
-                self._generate_many(iterate_until)
+                self._generate(iterate_until)
             except StopIteration:
                 pass
             # Now that we have 1) enough or 2) all the values, try returning again.
@@ -395,7 +396,7 @@ class SearchableLazyList(SearchableList):
             # Make sure we have enough values generated
             try:
                 iterate_until = item - super().__len__() + 1
-                self._generate_many(iterate_until)
+                self._generate(iterate_until)
             except StopIteration:
                 pass
         try:
@@ -404,7 +405,7 @@ class SearchableLazyList(SearchableList):
             self.delete(item)
 
     def __reversed__(self):
-        self._generate_many()
+        self._generate()
         return super().__reversed__()
 
     def delete(self, item: Any) -> None:
