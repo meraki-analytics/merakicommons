@@ -1,6 +1,5 @@
 from functools import wraps
 from typing import Callable, Any, TypeVar
-from weakref import WeakKeyDictionary
 from threading import Lock
 from collections import defaultdict
 import datetime
@@ -9,24 +8,26 @@ T = TypeVar("T")
 
 
 def lazy(method: Callable[[Any], T]) -> Callable[[Any], T]:
-    values = WeakKeyDictionary()
-
     @wraps(method)
     def wrapper(self) -> T:
+        s = "_lazy__{}".format(method.__name__)
         try:
-            return values[self]
-        except KeyError as error:
-            values[self] = method(self)
-            return values[self]
+            return getattr(self, s)
+        except AttributeError:
+            value = method(self)
+            setattr(self, s, value)
+            return value
 
     def _lazy_reset(self) -> None:
+        s = "_lazy__{}".format(method.__name__)
         try:
-            del values[self]
+            delattr(self, s)
         except KeyError:
             pass
 
     def _lazy_set(self, value) -> None:
-        values[self] = value
+        s = "_lazy__{}".format(method.__name__)
+        setattr(self, s, value)
 
     wrapper._lazy_reset = _lazy_reset
     wrapper._lazy_set = _lazy_set
