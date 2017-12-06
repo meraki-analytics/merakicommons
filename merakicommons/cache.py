@@ -76,7 +76,6 @@ class _CacheSegment(object):
                     results.append(item)
         return results
 
-
     def delete(self, type: Any, key: Any) -> None:
         with self._lock:
             del self._data[type][key]
