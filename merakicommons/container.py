@@ -88,7 +88,7 @@ def searchable(search_key_types: Mapping[Type, Union[str, Iterable[str]]]) -> Ca
 
 class SearchableList(list):
     def filter(self, function):
-        return filter(function, self)
+        return SearchableList(filter(function, self))
 
     def __getitem__(self, item: Any) -> Any:
         try:
@@ -161,7 +161,7 @@ class SearchableList(list):
 
 class SearchableSet(set):
     def filter(self, function):
-        return filter(function, self)
+        return SearchableSet(filter(function, self))
 
     def __getitem__(self, item: Any) -> Any:
         return self.find(item)
@@ -223,7 +223,7 @@ class SearchableSet(set):
 
 class SearchableDictionary(dict):
     def filter(self, function):
-        return filter(function, self.items())
+        return SearchableDictionary(filter(function, self.items()))
 
     def __getitem__(self, item: Any) -> Any:
         try:
@@ -333,9 +333,9 @@ class SearchableLazyList(SearchableList):
 
     def __str__(self):
         if self._empty:
-            return super().__str__()
+            return list.__str__(self)
         else:
-            string = super().__str__()
+            string = list.__str__(self)
             if string == "[]":
                 return "[...]"
             else:
@@ -373,11 +373,21 @@ class SearchableLazyList(SearchableList):
             assert self._empty
 
     def __getitem__(self, item: Any) -> Any:
+        is_slice = isinstance(item, slice)
+        if is_slice:
+            stop = item.stop - 1
+        else:
+            stop = item
+
         try:
-            return list.__getitem__(self, item)
+            if (not is_slice) or (super().__len__() >= stop - 1):
+                # [:10] requires super().__len__() >= 9 = 10 - 1
+                return list.__getitem__(self, item)
+            else:
+                raise IndexError
         except IndexError:
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
-            iterate_until = item - super().__len__() + 1
+            iterate_until = stop - super().__len__() + 1
             try:
                 self._generate(iterate_until)
             except StopIteration:
@@ -392,17 +402,32 @@ class SearchableLazyList(SearchableList):
             return self.find(item)
 
     def __delitem__(self, item: Any) -> None:
-        if isinstance(item, int):
-            # Make sure we have enough values generated
+        is_slice = isinstance(item, slice)
+        if is_slice:
+            stop = item.stop - 1
+        else:
+            stop = item
+        try:
+            if (not is_slice) or (super().__len__() >= stop - 1):
+                # [:10] requires super().__len__() >= 9 = 10 - 1
+                return list.__delitem__(self, item)
+            else:
+                raise IndexError
+        except IndexError:
+            # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
+            iterate_until = stop - super().__len__() + 1
             try:
-                iterate_until = item - super().__len__() + 1
                 self._generate(iterate_until)
             except StopIteration:
                 pass
-        try:
-            list.__delitem__(self, item)
-        except (IndexError, TypeError) as error:
-            self.delete(item)
+            # Now that we have 1) enough or 2) all the values, try deleting again.
+            # If we still get an index error, then we have an int that is being searched on.
+            try:
+                return list.__delitem__(self, item)
+            except IndexError:
+                return self.delete(item)
+        except TypeError:
+            return self.delete(item)
 
     def __reversed__(self):
         self._generate()

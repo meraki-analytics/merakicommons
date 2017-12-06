@@ -47,7 +47,8 @@ class _CacheSegment(object):
     def put(self, type: Any, key: Any, value: Any, timeout: int = -1) -> None:
         if timeout != 0:
             with self._lock:
-                timeout = datetime.timedelta(seconds=timeout)
+                if timeout != -1:
+                    timeout = datetime.timedelta(seconds=timeout)
                 self._data[type][key] = (value, timeout, datetime.datetime.now())
 
     def get(self, type: Any, key: Any) -> Any:
