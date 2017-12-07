@@ -377,7 +377,10 @@ class SearchableLazyList(SearchableList):
         if is_slice:
             stop = item.stop - 1
         else:
-            stop = item
+            if isinstance(item, int) and item < 0:
+                stop = None
+            else:
+                stop = item
 
         try:
             if (not is_slice) or (super().__len__() >= stop - 1):
@@ -387,7 +390,7 @@ class SearchableLazyList(SearchableList):
                 raise IndexError
         except IndexError:
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
-            iterate_until = stop - super().__len__() + 1
+            iterate_until = stop - super().__len__() + 1 if stop is not None else None
             try:
                 self._generate(iterate_until)
             except StopIteration:
