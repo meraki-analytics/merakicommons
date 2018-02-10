@@ -372,27 +372,73 @@ class SearchableLazyList(SearchableList):
                 pass
             assert self._empty
 
+    def _create_generator(self, s: slice):
+        def gen():
+            count = s.start
+            while count < s.stop:
+                try:
+                    x = self[count]
+                    if not self._empty:
+                        yield x
+                    else:
+                        raise StopIteration
+                except SearchError:
+                    raise StopIteration
+                count += s.step
+            raise StopIteration
+        return gen()
+
     def __getitem__(self, item: Any) -> Any:
+        """
+        Options:
+
+        `item` is a single integer:
+            Simply return the one item in the list.
+            Generate data up until that item if necessary.
+
+        `item` is a single element, but not an integer.
+            Return one item in the list using the Searchable functionality.
+            Generate as much data as is necessary.
+
+        `item` is a slice (of integers):
+            Options:
+
+            list[:]    start=0, stop=None, step=1
+            list[x:]   start=x, stop=None, step=1
+            list[:y]   start=0, stop=y, step=1
+            list[x:y]  start=x, stop=y, step=1
+            all of the above with step!=1
+
+            Returns a geneartor.
+        """
         is_slice = isinstance(item, slice)
-        if is_slice:
-            stop = item.stop - 1
-        else:
+        if not is_slice:
             if isinstance(item, int) and item < 0:
-                stop = None
+                stop = None  # Generate data until the end so that we can iterate backwards
             else:
                 stop = item
+        else:
+            # If all the data has been generated, just return the sliced list
+            if self._empty:
+                return list.__getitem__(item)
 
-        try:
-            if (not is_slice) or (super().__len__() >= stop - 1):
+            # Even if we don't have all the data, we might have enough of it to return normally
+            if item.stop is not None and super().__len__() >= item.stop - 1:
                 # [:10] requires super().__len__() >= 9 = 10 - 1
                 return list.__getitem__(self, item)
-            else:
-                raise IndexError
+
+            # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
+            item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
+            return self._create_generator(item)
+
+        # If we reach this code, `item` is not a slice (although it might be part of a slice)
+        try:
+            return list.__getitem__(self, item)
         except IndexError:
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
-            iterate_until = stop - super().__len__() + 1 if stop is not None else None
+            generate_n_more = stop - super().__len__() + 1 if stop is not None else None
             try:
-                self._generate(iterate_until)
+                self._generate(generate_n_more)
             except StopIteration:
                 pass
             # Now that we have 1) enough or 2) all the values, try returning again.
@@ -406,21 +452,35 @@ class SearchableLazyList(SearchableList):
 
     def __delitem__(self, item: Any) -> None:
         is_slice = isinstance(item, slice)
-        if is_slice:
-            stop = item.stop - 1
+        if not is_slice:
+            if isinstance(item, int) and item < 0:
+                stop = None  # Generate data until the end so that we can iterate backwards
+            else:
+                stop = item
         else:
-            stop = item
-        try:
-            if (not is_slice) or (super().__len__() >= stop - 1):
+            # If all the data has been generated, just delete the sliced list
+            if self._empty:
+                return list.__delitem__(item)
+
+            # Even if we don't have all the data, we might have enough of it to delete normally
+            if item.stop is not None and super().__len__() >= item.stop - 1:
                 # [:10] requires super().__len__() >= 9 = 10 - 1
                 return list.__delitem__(self, item)
-            else:
-                raise IndexError
+
+            # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
+            item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
+            gen = self._create_generator(item)
+            for x in gen:
+                self.delete(x)
+
+        # If we reach this code, `item` is not a slice (although it might be part of a slice)
+        try:
+            return list.__delitem__(self, item)
         except IndexError:
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
-            iterate_until = stop - super().__len__() + 1
+            generate_n_more = stop - super().__len__() + 1 if stop is not None else None
             try:
-                self._generate(iterate_until)
+                self._generate(generate_n_more)
             except StopIteration:
                 pass
             # Now that we have 1) enough or 2) all the values, try deleting again.
