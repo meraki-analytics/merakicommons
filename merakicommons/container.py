@@ -326,10 +326,16 @@ class SearchableLazyList(SearchableList):
     Arguments:
         constructor (callable): A function that returns a generator of the values to be put in the list.
     """
-    def __init__(self, generator: Generator):
+    def __init__(self, generator: Optional[Generator]=None, known_data: Optional[list]=None):
         self._generator = generator
-        self._empty = False
-        super().__init__()  # initialize an empty list
+        if self._generator is None:
+            self._empty = True
+        else:
+            self._empty = False
+        if known_data:
+            super().__init__(known_data)  # initialize from known data
+        else:
+            super().__init__()  # initialize an empty list
 
     def __str__(self):
         if self._empty:
@@ -372,10 +378,12 @@ class SearchableLazyList(SearchableList):
                 pass
             assert self._empty
 
-    def _create_generator(self, s: slice):
-        def gen():
-            count = s.start
-            while count < s.stop:
+    def _create_sliced_lazy_list(self, s: slice) -> "SearchableLazyList":
+        num_already_generated = list.__len__(self)
+
+        def gen(start, stop, step):
+            count = start
+            while count < stop:
                 try:
                     x = self[count]
                     if not self._empty:
@@ -384,9 +392,19 @@ class SearchableLazyList(SearchableList):
                         raise StopIteration
                 except SearchError:
                     raise StopIteration
-                count += s.step
+                count += step
             raise StopIteration
-        return gen()
+
+        already_known = []
+        if s.start < num_already_generated:
+            already_known_end = min(s.stop, num_already_generated)
+            already_known = self[s.start:already_known_end]
+            gen_start = already_known_end + 1
+        else:
+            gen_start = s.start
+        gen = gen(gen_start, s.stop, s.step)
+        new = SearchableLazyList(generator=gen, known_data=already_known)
+        return new
 
     def __getitem__(self, item: Any) -> Any:
         """
@@ -420,16 +438,16 @@ class SearchableLazyList(SearchableList):
         else:
             # If all the data has been generated, just return the sliced list
             if self._empty:
-                return list.__getitem__(item)
+                return SearchableLazyList(generator=None, known_data=list.__getitem__(self, item))
 
             # Even if we don't have all the data, we might have enough of it to return normally
             if item.stop is not None and super().__len__() >= item.stop - 1:
                 # [:10] requires super().__len__() >= 9 = 10 - 1
-                return list.__getitem__(self, item)
+                return SearchableLazyList(generator=None, known_data=list.__getitem__(self, item))
 
             # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
             item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
-            return self._create_generator(item)
+            return self._create_sliced_lazy_list(item)
 
         # If we reach this code, `item` is not a slice (although it might be part of a slice)
         try:
@@ -469,7 +487,7 @@ class SearchableLazyList(SearchableList):
 
             # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
             item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
-            gen = self._create_generator(item)
+            gen = self._create_sliced_lazy_list(item)
             for x in gen:
                 self.delete(x)
 
