@@ -351,7 +351,10 @@ class SearchableLazyList(SearchableList):
         for item in super().__iter__():
             yield item
         while not self._empty:
-            yield next(self)
+            try:
+                yield next(self)
+            except StopIteration:
+                return
 
     def __len__(self):
         if self._empty:
