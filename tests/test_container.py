@@ -1,6 +1,6 @@
 import pytest
 
-from merakicommons.container import SearchError, searchable, SearchableList, SearchableSet, SearchableDictionary
+from merakicommons.container import SearchError, searchable, SearchableList, SearchableSet, SearchableDictionary, LazyList, SearchableLazyList
 
 VALUE_COUNT = 100
 
@@ -632,3 +632,119 @@ def test_dict_delete():
 
     dict_.delete(defined)
     assert dict_ == {}
+
+
+def test_lazy_list():
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    assert ll[0] == 0
+    assert ll[5] == 5
+    assert list.__len__(ll) == 6
+    with pytest.raises(IndexError):
+        non_existent = ll[10]
+
+    assert len(ll) == 10
+
+
+def test_lazy_list_contains():
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    assert 5 in ll
+    assert list.__len__(ll) == 6
+    assert 50 not in ll
+
+
+def test_lazy_list_delete():
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    item = ll[5]
+    del ll[5]
+    assert list.__len__(ll) == 5
+    assert 5 not in ll
+
+    del ll[8]
+
+    with pytest.raises(IndexError):
+        del ll[50]
+
+
+def test_lazy_list_list_functionality():
+    # Append
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    ll.append(50)
+    assert ll[-1] == 50
+
+    # Clear
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    item = ll[5]
+    ll.clear()
+    assert len(ll) == 0
+
+    # Copy
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    item = ll[5]
+    new = ll.copy()
+    assert item == new[5]
+
+    # Count
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    assert ll.count(5) == 1
+
+    # Extend
+    ll.extend([1,2,3])
+    assert list.__eq__([1,2,3], ll[-3:])
+    assert len(ll) == 13
+
+    # Index
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    assert ll.index(5) == 5
+
+    # Insert
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    item = ll[5]
+    ll.insert(1, 'j')
+    assert ll[1] == 'j'
+    ll.insert(50, 'a')
+    assert ll[-1] == 'a'
+    assert len(ll) == 12
+
+    # Pop
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    assert ll.pop() == 9
+
+    # Reverse
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    first = ll[0]
+    ll.reverse()
+    assert ll[-1] == first
+
+    # Remove
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    ll.remove(5)
+    assert 5 not in ll
+
+    # Sort
+    ll = LazyList(generator=(i for i in range(10)), known_data=None)
+    ll.reverse()
+    ll.sort()
+    assert ll[0] == 0 and ll[-1] == 9
+
+
+def test_searchable_lazy_list():
+    @searchable({str: ['name'], int: ['id']})
+    class Person:
+        def __init__(self, name: str, id: int):
+            self.name = name
+            self.id = id
+
+    larry = Person('Larry', 1)
+    moe = Person('Moe', 2)
+    curly = Person('Curly', 3)
+    stooges = [larry, moe, curly]
+    stooges = SearchableLazyList(generator=(p for p in stooges))
+    assert stooges['Larry'].id == 1
+    assert stooges['Moe'].id == 2
+    assert stooges['Curly'].id == 3
+    assert len(stooges) == 3
+
+    stooges.delete('Moe')
+    assert len(stooges) == 2
+    assert 'Larry' in stooges
+    assert 'Moe' not in stooges
