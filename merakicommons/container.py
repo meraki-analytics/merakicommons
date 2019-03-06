@@ -92,7 +92,7 @@ class SearchableList(list):
 
     def __getitem__(self, item: Any) -> Any:
         try:
-            return super().__getitem__(item)
+            return list.__getitem__(self, item)
         except TypeError:
             return self.find(item)
 
@@ -101,7 +101,7 @@ class SearchableList(list):
 
     def __delitem__(self, item: Any) -> None:
         try:
-            super().__delitem__(item)
+            list.__delitem__(self, item)
         except TypeError:
             self.delete(item)
 
@@ -227,7 +227,7 @@ class SearchableDictionary(dict):
 
     def __getitem__(self, item: Any) -> Any:
         try:
-            return super().__getitem__(item)
+            return dict.__getitem__(self, item)
         except KeyError:
             return self.find(item)
 
@@ -236,7 +236,7 @@ class SearchableDictionary(dict):
 
     def __delitem__(self, item: Any) -> None:
         try:
-            super().__delitem__(item)
+            dict.__delitem__(self, item)
         except KeyError:
             self.delete(item)
 
@@ -339,9 +339,9 @@ class LazyList(list):
 
     def __str__(self):
         if self._empty:
-            return super().__str__()
+            return list.__str__(self)
         else:
-            string = super().__str__()
+            string = list.__str__(self)
             if string == "[]":
                 return "[...]"
             else:
@@ -396,7 +396,6 @@ class LazyList(list):
                 except SearchError:
                     raise StopIteration
                 count += step
-            raise StopIteration
 
         already_known = []
         if s.start < num_already_generated:
@@ -437,12 +436,12 @@ class LazyList(list):
         else:
             # If all the data has been generated, just return the sliced list
             if self._empty:
-                return LazyList(generator=None, known_data=super().__getitem__(item))
+                return LazyList(generator=None, known_data=list.__getitem__(self, item))
 
             # Even if we don't have all the data, we might have enough of it to return normally
             if item.stop is not None and super().__len__() >= item.stop - 1:
                 # [:10] requires super().__len__() >= 9 = 10 - 1
-                return LazyList(generator=None, known_data=super().__getitem__(item))
+                return LazyList(generator=None, known_data=list.__getitem__(self, item))
 
             # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
             item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
@@ -450,7 +449,7 @@ class LazyList(list):
 
         # If we reach this code, `item` is not a slice (although it might be part of a slice)
         try:
-            return super().__getitem__(item)
+            return list.__getitem__(self, item)
         except IndexError:
             # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
             generate_n_more = stop - super().__len__() + 1 if stop is not None else None
@@ -459,7 +458,7 @@ class LazyList(list):
             except StopIteration:
                 pass
             # Now that we have 1) enough or 2) all the values, try returning again.
-            return super().__getitem__(item)
+            return list.__getitem__(self, item)
 
     def __delitem__(self, item: Any) -> None:
         is_slice = isinstance(item, slice)
@@ -469,7 +468,7 @@ class LazyList(list):
             else:
                 stop = item
             try:
-                return super().__delitem__(item)
+                return list.__delitem__(self, item)
             except IndexError:
                 # Generate new values until: 1) we get to position `item` (which is an int) or 2) no more values are left
                 generate_n_more = stop - super().__len__() + 1 if stop is not None else None
@@ -478,16 +477,16 @@ class LazyList(list):
                 except StopIteration:
                     pass
                 # Now that we have 1) enough or 2) all the values, try deleting again.
-                return super().__delitem__(item)
+                return list.__delitem__(self, item)
         else:
             # If all the data has been generated, just delete the sliced list
             if self._empty:
-                return super().__delitem__(item)
+                return list.__delitem__(self, item)
 
             # Even if we don't have all the data, we might have enough of it to delete normally
             if item.stop is not None and super().__len__() >= item.stop - 1:
                 # [:10] requires super().__len__() >= 9 = 10 - 1
-                return super().__delitem__(item)
+                return list.__delitem__(self, item)
 
             # We don't have enough data, so we need to generate the data on-the-fly as the list is iterated over
             item = slice(item.start or 0, item.stop or float("inf"), item.step or 1)
@@ -499,7 +498,7 @@ class LazyList(list):
                     self._generate_more(last)
                 except StopIteration:
                     pass
-            return super().__delitem__(item)
+            return list.__delitem__(self, item)
 
     def __reversed__(self):
         self._generate_more()
@@ -511,7 +510,7 @@ class LazyList(list):
         while not self._empty:
             try:
                 self._generate_more(1)
-                if super().__getitem__(-1) == item:
+                if list.__getitem__(self, -1) == item:
                     return True
             except StopIteration:
                 pass
@@ -548,7 +547,7 @@ class LazyList(list):
         except ValueError:
             while not self._empty:
                 self._generate_more(1)
-                if super().__getitem__(-1) == object:
+                if list.__getitem__(self, -1) == object:
                     return super().__len__() -1
         raise ValueError(f"{object} is not in LazyList")
 
