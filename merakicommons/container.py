@@ -598,7 +598,7 @@ class LazyList(list):
 class SearchableLazyList(LazyList, SearchableList):
     def __getitem__(self, item):
         try:
-            if not isinstance(item, int):
+            if not isinstance(item, (int, slice)):
                 raise TypeError
             return LazyList.__getitem__(self, item)
         except TypeError:
