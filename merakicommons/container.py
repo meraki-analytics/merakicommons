@@ -39,7 +39,7 @@ def searchable(search_key_types: Mapping[Type, Union[str, Iterable[str]]]) -> Ca
                 continue
 
             # Found the search item directly as an attribute
-            if value == item:
+            if not isinstance(value, LazyList) and value == item:
                 return True
 
             # Try to pass it along to the attribute's __contains__
